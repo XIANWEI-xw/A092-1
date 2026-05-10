@@ -356,7 +356,7 @@
             '#lensApp .heat-bar-bg{width:100%;height:4px;background:var(--lk-gbss);border-radius:2px;overflow:hidden;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensApp .heat-bar-fill{height:100%;width:0%;border-radius:2px;transition:width .8s cubic-bezier(.16,1,.3,1),background .8s,box-shadow .8s;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:width}' +
 
-            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;will-change:scroll-position;-webkit-transform:translateZ(0);transform:translateZ(0);}' +
+            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;}' +
             '#lensApp .chat-scroll::-webkit-scrollbar{display:none}' +
             '#lensApp .msg-row{animation:lk-fadeIn .3s ease-out forwards;opacity:0;contain:layout style;cursor:pointer;-webkit-tap-highlight-color:transparent;}' +
             '@keyframes lk-fadeIn{to{opacity:1}}' +
