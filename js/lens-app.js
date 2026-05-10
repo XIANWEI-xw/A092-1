@@ -962,30 +962,20 @@
 
         function appendBatch(start) {
             var batchFrag = document.createDocumentFragment();
-            var end = Math.min(start + BATCH, total);for (var i = start; i < end; i++) {
+            var end = Math.min(start + BATCH, total);
+            for (var i = start; i < end; i++) {
                 var m   = visible[i];
                 var idx = startIdx + i;
                 var el  = buildMsgEl(m, idx);
                 batchFrag.appendChild(el);
             }
+            container.insertBefore(batchFrag, typing);
 
-            if (isScrolling) {
-                setTimeout(function() {
-                    container.insertBefore(batchFrag, typing);
-                    afterBatch(end);
-                }, 50);
-            } else {
-                container.insertBefore(batchFrag, typing);
-                afterBatch(end);
-            }
-        }
-
-        function afterBatch(end) {
             if (end < total) {
                 requestAnimationFrame(function() { appendBatch(end); });
             } else {
                 if (isLoadMore) {
-                    container.scrollTop = container.scrollHeight- oldHeight;
+                    container.scrollTop = container.scrollHeight - oldHeight;
                 } else {
                     requestAnimationFrame(function() {
                         container.scrollTop = container.scrollHeight;
