@@ -3832,10 +3832,17 @@
                         var tx = (Math.random() - 0.5) * 60;
                         var ty = -40 - Math.random() * 40;
                         var tr = (Math.random() - 0.5) * 30;
-                        el.style.setProperty('--tx', tx + 'px');
-                        el.style.setProperty('--ty', ty + 'px');
-                        el.style.setProperty('--tr', tr + 'deg');
-                        el.style.animation = 'rb-msg-shatter 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+                        var keyframes = 'rb-shatter-' + i + '-' + Date.now();
+                        var styleEl = document.createElement('style');
+                        styleEl.textContent = '@keyframes ' + keyframes + '{' +
+                            '0%{opacity:1;transform:translate(0,0) scale(1) rotate(0deg);filter:blur(0);}' +
+                            '100%{opacity:0;transform:translate(' + tx + 'px,' + ty + 'px) scale(0.8) rotate(' + tr + 'deg);filter:blur(4px);}' +
+                        '}';
+                        document.head.appendChild(styleEl);
+                        el.style.animation = keyframes + ' 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+                        setTimeout(function() {
+                            if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+                        }, 1000);
                     }, i * 40);
                 });
 
