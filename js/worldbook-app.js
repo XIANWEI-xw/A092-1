@@ -525,7 +525,7 @@
         var filePill = e.fileName
             ? '<div class="e-pill"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' + esc(e.fileName) + '</div>'
             : '';
-        var contentPreview = esc((e.content || '').substring(0, 60));
+        var contentPreview = esc(String(e.content || '').substring(0, 60));
 
         return '<div class="e-card"' + (dim ? ' style="opacity:.50"' : '') + '>' +
             '<div class="e-head">' +
@@ -557,18 +557,42 @@
         '</div>';
     }
 
+       function loadEntitiesDirect(cb) {
+        try {
+            var req = indexedDB.open('CoutureOS_ChatDB');
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                if (!db.objectStoreNames.contains('entities')) { cb([]); return; }
+                var tx = db.transaction(['entities','avatars'], 'readonly');
+                var entReq = tx.objectStore('entities').getAll();
+                entReq.onsuccess = function(ev) {
+                    var entsLoaded = ev.target.result || [];
+                    if (!entsLoaded.length) { cb([]); return; }
+                    var avStore = tx.objectStore('avatars');
+                    var remaining = entsLoaded.length;
+                    entsLoaded.forEach(function(ent) {
+                        var avReq = avStore.get(ent.id);
+                        avReq.onsuccess = function(e2) {
+                            var av = e2.target.result;
+                            if (av && av.data) ent.avatar = av.data;
+                            if (--remaining === 0) cb(entsLoaded);
+                        };
+                        avReq.onerror = function() {
+                            if (--remaining === 0) cb(entsLoaded);
+                        };
+                    });
+                };
+                entReq.onerror = function() { cb([]); };
+            };
+            req.onerror = function() { cb([]); };
+        } catch(err) { cb([]); }
+    }
+
     function renderChars() {
         var container = document.getElementById('wbTabChars');
-        var ents = [];
-        if (typeof ChatDB !== 'undefined' && ChatDB.loadEntities) {
-            ChatDB.loadEntities(function(loaded) {
-                ents = loaded || [];
-                doRenderChars(container, ents);
-            });
-        } else {
-            try { ents = JSON.parse(localStorage.getItem('ca-entities') || '[]'); } catch(e){}
-            doRenderChars(container, ents);
-        }
+        loadEntitiesDirect(function(loaded) {
+            doRenderChars(container, loaded || []);
+        });
     }
 
     function doRenderChars(container, ents) {
@@ -768,44 +792,118 @@
     function importJSON(text, fileName) {
         var trimmed = (text || '').trim();
         if (!trimmed) { showToast('文件内容为空'); return; }
+        var baseName = (fileName || 'Imported').replace(/\.[^.]+$/, '');
 
         if (trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[') {
             try {
                 var obj = JSON.parse(trimmed);
                 var arr = [];
+
                 if (Array.isArray(obj)) {
                     arr = obj;
-                } else if (obj.entries && Array.isArray(obj.entries)) {
-                    arr = obj.entries;
-                } else if (obj.name || obj.content) {
+                } else if (obj.entries) {
+                    if (Array.isArray(obj.entries)) {
+                        arr = obj.entries;
+                    } else if (typeof obj.entries === 'object') {
+                        arr = Object.values(obj.entries);
+                    }
+                } else if (obj.worldInfo && Array.isArray(obj.worldInfo)) {
+                    arr = obj.worldInfo;
+                } else if (obj.items && Array.isArray(obj.items)) {
+                    arr = obj.items;
+                } else if (obj.data && Array.isArray(obj.data)) {
+                    arr = obj.data;
+                } else if (obj.content || obj.text || obj.body || obj.comment || obj.lore) {
                     arr = [obj];
                 } else {
                     var vals = Object.values(obj);
-                    if (vals.length && typeof vals[0] === 'object') arr = vals;
-                    else arr = [obj];
+                    if (vals.length && typeof vals[0] === 'object' && vals[0] !== null) {
+                        arr = vals;
+                    } else if (vals.length && typeof vals[0] === 'string') {
+                        arr = Object.keys(obj).map(function(k) { return { name: k, content: obj[k] }; });
+                    } else {
+                        arr = [obj];
+                    }
                 }
+
                 var added = 0;
-                arr.forEach(function(item) {
+                arr.forEach(function(item, idx) {
                     if (!item) return;
+
+                    if (typeof item === 'string') {
+                        entries.push({
+                            id: 'wb_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2,5),
+                            name: baseName + '_' + (idx + 1),
+                            keywords: [], content: item, depth: 0,
+                            insertionOrder: idx, position: 'before_char',
+                            enabled: true, charIds: [], avatar: '', fileContent: '', fileName: ''
+                        });
+                        added++;
+                        return;
+                    }
+
+                    if (typeof item !== 'object') return;
+
+                    var name = item.comment || item.name || item.title || item.label ||
+                               item.memo || item.header || item.subject || item.topic ||
+                               (baseName + (arr.length > 1 ? ' · ' + (idx + 1) : ''));
+
+                    var content = item.content || item.text || item.body || item.lore ||
+                                  item.description || item.value || item.data || item.info || '';
+                    if (typeof content !== 'string') {
+                        try { content = JSON.stringify(content); } catch(e) { content = String(content); }
+                    }
+
+                    if (!content) {
+                        Object.keys(item).forEach(function(k) {
+                            if (!content && typeof item[k] === 'string' && item[k].length > 20) {
+                                if (['comment','name','title','label','memo','comment'].indexOf(k) === -1) {
+                                    content = item[k];
+                                }
+                            }
+                        });
+                    }
+
+                    var kw = item.key || item.keys || item.keywords || item.triggers || item.keyword || [];
+                    if (typeof kw === 'string') kw = kw.split(/[,，]/).map(function(k) { return k.trim(); }).filter(Boolean);
+                    if (!Array.isArray(kw)) kw = [];
+
+                    var posMap = {
+                        0: 'before_char', 1: 'after_char', 2: 'after_prompt', 4: 'before_char',
+                        'before_char': 'before_char', 'after_char': 'after_char', 'after_prompt': 'after_prompt'
+                    };
+                    var pos = (item.position !== undefined && posMap[item.position] !== undefined)
+                        ? posMap[item.position] : 'before_char';
+
+                    var enabled = true;
+                    if (item.disable !== undefined) enabled = !item.disable;
+                    else if (item.disabled !== undefined) enabled = !item.disabled;
+                    else if (item.enabled !== undefined) enabled = item.enabled !== false;
+                    else if (item.active !== undefined) enabled = !!item.active;
+
                     entries.push({
-                        id:             'wb_' + Date.now() + '_' + (added++),
-                        name:           item.name || item.title || (fileName ? fileName.replace(/\.[^.]+$/,'') : 'Untitled'),
-                        keywords:       item.keys || item.keywords || item.key || [],
-                        content:        item.content || item.text || item.body || '',
-                        depth:          parseInt(item.depth,10) || 0,
-                        insertionOrder: parseInt(item.insertion_order,10) || parseInt(item.depth,10) || 0,
-                        position:       item.position || 'before_char',
-                        enabled:        item.enabled !== false,
+                        id:             'wb_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2,5),
+                        name:           String(name),
+                        keywords:       kw,
+                        content:        content,
+                        depth:          parseInt(item.depth, 10) || 0,
+                        insertionOrder: parseInt(item.order, 10) || parseInt(item.insertion_order, 10) || parseInt(item.depth, 10) || idx,
+                        position:       pos,
+                        enabled:        enabled,
                         charIds:        [],
                         avatar:         '',
                         fileContent:    '',
                         fileName:       ''
                     });
+                    added++;
                 });
-                saveEntries(entries);
-                renderAll();
-                showToast('已导入 ' + added + ' 条条目');
-                return;
+
+                if (added > 0) {
+                    saveEntries(entries);
+                    renderAll();
+                    showToast('已导入 ' + added + ' 条条目');
+                    return;
+                }
             } catch(ex) {
                 /* fall through to plain text */
             }
@@ -816,23 +914,63 @@
     function importPlainText(text, fileName) {
         if (!text || !text.trim()) { showToast('文件内容为空'); return; }
         var baseName = (fileName || 'Imported').replace(/\.[^.]+$/, '');
-        entries.push({
-            id:             'wb_' + Date.now(),
-            name:           baseName,
-            keywords:       [],
-            content:        text.trim(),
-            depth:          0,
-            insertionOrder: 0,
-            position:       'before_char',
-            enabled:        true,
-            charIds:        [],
-            avatar:         '',
-            fileContent:    text.trim(),
-            fileName:       fileName || ''
+
+        var headerRegex = /^#{1,3}\s+(.+)/;
+        var lines = text.split('\n');
+        var sections = [];
+        var cur = null;
+
+        lines.forEach(function(line) {
+            var m = line.match(headerRegex);
+            if (m) {
+                if (cur && cur.content.trim()) sections.push(cur);
+                cur = { name: m[1].trim(), content: '' };
+            } else {
+                if (!cur) cur = { name: baseName, content: '' };
+                cur.content += line + '\n';
+            }
         });
-        saveEntries(entries);
-        renderAll();
-        showToast('已导入文件：' + baseName);
+        if (cur && cur.content.trim()) sections.push(cur);
+
+        if (sections.length > 1) {
+            sections.forEach(function(sec, idx) {
+                entries.push({
+                    id:             'wb_' + Date.now() + '_' + idx,
+                    name:           sec.name,
+                    keywords:       [],
+                    content:        sec.content.trim(),
+                    depth:          0,
+                    insertionOrder: idx,
+                    position:       'before_char',
+                    enabled:        true,
+                    charIds:        [],
+                    avatar:         '',
+                    fileContent:    sec.content.trim(),
+                    fileName:       fileName || ''
+                });
+            });
+            saveEntries(entries);
+            renderAll();
+            showToast('已导入 ' + sections.length + ' 条条目（按章节分割）');
+        } else {
+            entries.push({
+                id:             'wb_' + Date.now(),
+                name:           baseName,
+                keywords:       [],
+                content:        text.trim(),
+                depth:          0,
+                insertionOrder: 0,
+                position:       'before_char',
+                enabled:        true,
+                charIds:        [],
+                avatar:         '',
+                fileContent:    text.trim(),
+                fileName:       fileName || ''
+            });
+            saveEntries(entries);
+            renderAll();
+            showToast('已导入文件：' + baseName);
+        }
     }
 
     /* ══════════════════════════════════════

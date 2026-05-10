@@ -6,10 +6,7 @@ window.onload = function () {
     setInterval(updateClock, 1000);
     initDesktopSwiper();
     renderPage1();
-    // 预热存储缓存，后续所有读取走内存
-    ChatDB.warmup(function () {
-        console.log('✅ A0nynx_3i 启动 · 存储缓存就绪');
-    });
+    console.log('✅ A0nynx_3i 启动');
 };
 
 /* ── 时钟 ── */
@@ -71,7 +68,7 @@ function renderPage1() {
         <div class="bg-watermark">Aesthetic</div>
 
         <!-- Editorial 日期组件 -->
-        <div class="widget-editorial" style="margin-top:80px;">
+        <div class="widget-editorial">
             <div class="date-watermark-signature">Signature</div>
             <div class="widget-date">24 <span>Nov.</span></div>
             <div class="widget-date" style="font-size:28px;color:#555;margin-top:-2px;">Friday</div>

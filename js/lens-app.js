@@ -20,28 +20,52 @@
     var baseDimOpacity = 0.45;
 
     var LensDB = {
-        _cache: {},
-
-        save: function(key, data, cb) {
-            this._cache[key] = data;
-            ChatDB.blobSet(key, data, cb);
-        },
-
-        load: function(key, cb) {
-            if (this._cache[key] !== undefined) {
-                cb(this._cache[key]);
-                return;
-            }
+        _db: null,
+        _open: function(cb) {
+            if (this._db) { cb(this._db); return; }
             var self = this;
-            ChatDB.blobGet(key, function(data) {
-                if (data !== null) self._cache[key] = data;
-                cb(data);
+            try {
+                var req = indexedDB.open('LensConvDB', 1);
+                req.onupgradeneeded = function(e) {
+                    var d = e.target.result;
+                    if (!d.objectStoreNames.contains('convs')) d.createObjectStore('convs');
+                };
+                req.onsuccess = function(e) { self._db = e.target.result; cb(self._db); };
+                req.onerror = function() { cb(null); };
+            } catch(e) { cb(null); }
+        },
+        save: function(key, data, cb) {
+            this._open(function(d) {
+                if (!d) { if (cb) cb(); return; }
+                try {
+                    var tx = d.transaction('convs', 'readwrite');
+                    tx.objectStore('convs').put(data, key);
+                    tx.oncomplete = function() { if (cb) cb(); };
+                    tx.onerror = function() { if (cb) cb(); };
+                } catch(e) { if (cb) cb(); }
             });
         },
-
+        load: function(key, cb) {
+            this._open(function(d) {
+                if (!d) { cb(null); return; }
+                try {
+                    var tx = d.transaction('convs', 'readonly');
+                    var r = tx.objectStore('convs').get(key);
+                    r.onsuccess = function() { cb(r.result || null); };
+                    r.onerror = function() { cb(null); };
+                } catch(e) { cb(null); }
+            });
+        },
         del: function(key, cb) {
-            delete this._cache[key];
-            ChatDB.blobDel(key, cb);
+            this._open(function(d) {
+                if (!d) { if (cb) cb(); return; }
+                try {
+                    var tx = d.transaction('convs', 'readwrite');
+                    tx.objectStore('convs').delete(key);
+                    tx.oncomplete = function() { if (cb) cb(); };
+                    tx.onerror = function() { if (cb) cb(); };
+                } catch(e) { if (cb) cb(); }
+            });
         }
     };
 
@@ -149,18 +173,11 @@
             if (appEl) appEl.classList.remove('lens-light');
         }
         var dim = document.getElementById('lensBgDim');
-        if (dim) {
-            dim.style.willChange = 'opacity';
-            dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
-        }
+        if (dim) dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
         updateHeat(heat);
     }
 
-    var _narrCache = {};
-
     function parseNarr(text) {
-        if (_narrCache[text]) return _narrCache[text];
-
         var h = esc(text);
         h = h.replace(/\[ACT\]([\s\S]*?)\[\/ACT\]/gi, function(_, c) {
             return '<span class="act">' + c.replace(/\n+/g, ' ').trim() + '</span>';
@@ -179,10 +196,7 @@
         if (h.indexOf('<span') === -1) {
             h = '<span class="act">' + h + '</span>';
         }
-        var result = '<div class="narr">' + h + '</div>';
-        if (Object.keys(_narrCache).length > 200) _narrCache = {};
-        _narrCache[text] = result;
-        return result;
+        return '<div class="narr">' + h + '</div>';
     }
 
     var ARCHITECT_STYLE = 'System Instruction: The Humanistic Architect & Literary Soul\n\n' +
@@ -255,7 +269,7 @@
 
             '#lensListPage{background:#050810;overflow-y:auto;scrollbar-width:none;position:absolute;inset:0;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensListPage::-webkit-scrollbar{display:none}' +
-            '#lensListCanvas{position:absolute;inset:0;z-index:0;pointer-events:none;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
+            '#lensListCanvas{position:absolute;inset:0;z-index:0;pointer-events:none}' +
             '#lensApp .list-content{position:relative;z-index:2;padding:0 0 60px}' +
             '#lensApp .lens-close-float{position:absolute;top:50px;left:20px;z-index:20;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.05);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform}' +
             '#lensApp .lens-close-float:active{-webkit-transform:translateZ(0) scale(.9);transform:translateZ(0) scale(.9)}' +
@@ -285,13 +299,13 @@
             '#lensApp .char-arrow{position:absolute;right:20px;bottom:22px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center}' +
             '#lensApp .char-arrow svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2}' +
 
-            '#lensChatPage{background:#050810;display:flex;flex-direction:column;position:absolute;inset:0;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
-            '#lensChatPage.hidden{transform:translate3d(30px,0,0);}' +
-            '#lensApp .bg-container{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);will-change:transform;image-rendering:-webkit-optimize-contrast;transition:transform 1.5s ease;backface-visibility:hidden;-webkit-backface-visibility:hidden;isolation:isolate;}' +
-            '#lensApp .bg-dim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.45);pointer-events:none;transition:background .8s ease;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);will-change:opacity;backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
-            '@keyframes lk-deep-breath{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(0,0,0) scale(1.04)}}' +
-            '#lensApp .vibe-breathing{animation:lk-deep-breath var(--breath-speed,6s) infinite ease-in-out;will-change:transform;}' +
-            '#lensPartCanvas{position:absolute;inset:0;z-index:1;pointer-events:none;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
+            '#lensChatPage{background:#050810;display:flex;flex-direction:column;position:absolute;inset:0}' +
+            '#lensChatPage.hidden{transform:translateX(30px)}' +
+            '#lensApp .bg-container{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;image-rendering:-webkit-optimize-contrast;transition:transform 1.5s ease}' +
+            '#lensApp .bg-dim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.45);pointer-events:none;transition:background .8s ease;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
+            '@keyframes lk-deep-breath{0%,100%{transform:scale(1) translateZ(0)}50%{transform:scale(1.04) translateZ(0)}}' +
+            '#lensApp .vibe-breathing{animation:lk-deep-breath var(--breath-speed,6s) infinite ease-in-out}' +
+            '#lensPartCanvas{position:absolute;inset:0;z-index:1;pointer-events:none}' +
             '#lensApp .app{position:relative;z-index:2;display:flex;flex-direction:column;height:100%}' +
 
             '#lensApp .header{position:absolute;top:0;left:0;right:0;padding:44px 20px 12px;display:flex;align-items:center;justify-content:space-between;z-index:30}' +
@@ -356,10 +370,10 @@
             '#lensApp .heat-bar-bg{width:100%;height:4px;background:var(--lk-gbss);border-radius:2px;overflow:hidden;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensApp .heat-bar-fill{height:100%;width:0%;border-radius:2px;transition:width .8s cubic-bezier(.16,1,.3,1),background .8s,box-shadow .8s;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:width}' +
 
-            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;}' +
+            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;will-change:scroll-position;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensApp .chat-scroll::-webkit-scrollbar{display:none}' +
-            '#lensApp .msg-row{opacity:0;contain:layout style;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .3s ease-out;}' +
-            '#lensApp .msg-row.visible{opacity:1;}' +
+            '#lensApp .msg-row{animation:lk-fadeIn .3s ease-out forwards;opacity:0;contain:layout style;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;isolation:isolate}' +
+            '@keyframes lk-fadeIn{to{opacity:1}}' +
             '@keyframes lk-msg-dissolve{' +
                 '0%{opacity:1;-webkit-transform:translateZ(0) translateY(0) scale(1);transform:translateZ(0) translateY(0) scale(1);filter:blur(0px)}' +
                 '30%{opacity:.7;-webkit-transform:translateZ(0) translateY(-6px) scale(1.01);transform:translateZ(0) translateY(-6px) scale(1.01);filter:blur(0.5px)}' +
@@ -775,17 +789,43 @@
         document.body.appendChild(el);
     }
 
+    function loadEntitiesDirect(cb) {
+        try {
+            var req = indexedDB.open('CoutureOS_ChatDB');
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                if (!db.objectStoreNames.contains('entities')) { cb([]); return; }
+                var tx = db.transaction(['entities','avatars'], 'readonly');
+                var entReq = tx.objectStore('entities').getAll();
+                entReq.onsuccess = function(ev) {
+                    var entsLoaded = ev.target.result || [];
+                    if (!entsLoaded.length) { cb([]); return; }
+                    var avStore = tx.objectStore('avatars');
+                    var remaining = entsLoaded.length;
+                    entsLoaded.forEach(function(ent) {
+                        var avReq = avStore.get(ent.id);
+                        avReq.onsuccess = function(e2) {
+                            var av = e2.target.result;
+                            if (av && av.data) ent.avatar = av.data;
+                            if (--remaining === 0) cb(entsLoaded);
+                        };
+                        avReq.onerror = function() {
+                            if (--remaining === 0) cb(entsLoaded);
+                        };
+                    });
+                };
+                entReq.onerror = function() { cb([]); };
+            };
+            req.onerror = function() { cb([]); };
+        } catch(err) { cb([]); }
+    }
+
     function loadEntities() {
         ents = [];
-        if (typeof ChatDB !== 'undefined' && ChatDB.loadEntities) {
-            ChatDB.loadEntities(function (loaded) {
-                ents = loaded || [];
-                renderCharList();
-            });
-        } else {
-            try { ents = JSON.parse(localStorage.getItem('ca-entities') || '[]'); } catch (e) { ents = []; }
+        loadEntitiesDirect(function(loaded) {
+            ents = loaded || [];
             renderCharList();
-        }
+        });
     }
 
     function renderCharList() {
@@ -923,110 +963,43 @@
 
     function renderConvToDOM(msgs, isLoadMore) {
         var container = document.getElementById('lensChatContainer');
-        var typing    = document.getElementById('lensTyping');
-        if (!container || !typing) return;
+        var typing = document.getElementById('lensTyping');
 
         var oldHeight = container.scrollHeight;
 
-        while (container.firstChild && container.firstChild !== typing) {
-            container.removeChild(container.firstChild);
-        }
+        while (container.firstChild && container.firstChild !== typing) container.removeChild(container.firstChild);
         if (!msgs.length) return;
 
         var startIdx = Math.max(0, msgs.length - lensDisplayLimit);
-        var visible  = msgs.slice(startIdx);
+        var visible = msgs.slice(startIdx);
 
-        var frag = document.createDocumentFragment();
-
+        var html = '';
         if (startIdx > 0) {
-            var hint = document.createElement('div');
-            hint.id = 'lensLoadMore';
-            hint.style.cssText = 'text-align:center;padding:20px 0 10px;font-family:"Syncopate",sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;';
-            hint.textContent = '— LOAD MORE —';
-            hint.addEventListener('click', function() {
+            html += '<div class="lens-load-hint" style="text-align:center;padding:20px 0 10px;font-family:\'Syncopate\',sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;" id="lensLoadMore">— LOAD MORE —</div>';
+        }
+        for (var i = 0; i < visible.length; i++) {
+            html += buildMsgHTML(visible[i], startIdx + i);
+        }
+
+        var wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        var frag = document.createDocumentFragment();
+        while (wrap.firstChild) frag.appendChild(wrap.firstChild);
+        container.insertBefore(frag, typing);
+
+        if (isLoadMore) {
+            container.scrollTop = container.scrollHeight - oldHeight;
+        } else {
+            scrollBot();
+        }
+
+        var loadMoreBtn = document.getElementById('lensLoadMore');
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', function() {
                 lensDisplayLimit += 15;
                 renderConvToDOM(curMessages, true);
             });
-            frag.appendChild(hint);
         }
-
-        var BATCH = 8;
-        var total = visible.length;
-
-        var isScrolling = false;var scrollTid = 0;
-        container.addEventListener('scroll', function() {
-            isScrolling = true;
-            clearTimeout(scrollTid);
-            scrollTid = setTimeout(function() { isScrolling = false; }, 150);
-        }, { passive: true });
-
-        function appendBatch(start) {
-            var batchFrag = document.createDocumentFragment();
-            var end = Math.min(start + BATCH, total);
-            for (var i = start; i < end; i++) {
-                var m   = visible[i];
-                var idx = startIdx + i;
-                var el  = buildMsgEl(m, idx);
-                batchFrag.appendChild(el);
-            }
-            container.insertBefore(batchFrag, typing);
-
-            if (end < total) {
-                requestAnimationFrame(function() { appendBatch(end); });
-            } else {
-                if (isLoadMore) {
-                    container.scrollTop = container.scrollHeight - oldHeight;
-                } else {
-                    requestAnimationFrame(function() {
-                        container.scrollTop = container.scrollHeight;
-                    });
-                }
-            }
-        }
-
-        container.insertBefore(frag, typing);
-        appendBatch(0);
-    }
-
-    function buildMsgEl(m, idx) {
-        var el = document.createElement('div');
-        el.dataset.msgIdx  = idx;
-        el.dataset.msgRole = m.role === 'assistant' ? 'assistant' : (m.isDirector ? 'director' : 'user');
-        el.classList.add('visible');
-
-        if (m.role === 'user' && m.isDirector) {
-            el.className = 'msg-row msg-director';
-            var card = document.createElement('div');
-            card.className = 'director-card';
-            var hdr = document.createElement('div');
-            hdr.className = 'dir-header';
-            hdr.textContent = 'DIRECTOR OVERRIDE';
-            card.appendChild(hdr);
-            if (m.scene) {
-                var sc = document.createElement('div');
-                sc.className = 'dir-section';
-                sc.innerHTML = '<span class="dir-label">SCENE</span><div class="dir-scene-text">' + esc(m.scene) + '</div>';
-                card.appendChild(sc);
-            }
-            if (m.dlg) {
-                var dl = document.createElement('div');
-                dl.className = 'dir-section';
-                dl.innerHTML = '<span class="dir-label">DIALOGUE</span><div class="dir-dlg-text">\u201C' + esc(m.dlg) + '\u201D</div>';
-                card.appendChild(dl);
-            }
-            el.appendChild(card);
-        } else if (m.role === 'user') {
-            el.className = 'msg-row msg-user';
-            var ut = document.createElement('div');
-            ut.className   = 'user-text';
-            ut.textContent = m.text;
-            el.appendChild(ut);
-        } else {
-            el.className = 'msg-row msg-ai';
-            el.innerHTML = parseNarr(m.text);
-        }
-
-        return el;
     }
 
     function enterChat(entId) {
@@ -1114,57 +1087,46 @@
 
     function updateHeat(val) {
         heat = parseInt(val, 10);
-        var heatValEl = document.getElementById('lensHeatVal');
-        if (heatValEl) heatValEl.innerText = val + '%';
-        var hb  = document.getElementById('lensHeatBar');
-        var bg  = document.getElementById('lensBg');
+        document.getElementById('lensHeatVal').innerText = val + '%';
+        var hb = document.getElementById('lensHeatBar');
+        hb.style.width = val + '%';
+        var bg = document.getElementById('lensBg');
         var dim = document.getElementById('lensBgDim');
-        var av  = document.getElementById('lensAvatarWrap');
+        var av = document.getElementById('lensAvatarWrap');
         var appEl = document.getElementById('lensApp');
-        if (!hb || !bg) return;
         var isLight = appEl && appEl.classList.contains('lens-light');
 
-        requestAnimationFrame(function () {
-            hb.style.width = val + '%';
-
-            if (val >= 75) {
-                hb.style.background = isLight
-                    ? 'linear-gradient(to right,rgba(18,12,12,.40),rgba(18,12,12,.82))'
-                    : 'linear-gradient(to right,rgba(255,255,255,.6),#fff)';
-                hb.style.boxShadow = isLight ? 'none' : '0 0 20px rgba(255,255,255,.9)';
-                bg.style.setProperty('--breath-speed', '3.5s');
-                bg.classList.add('vibe-breathing');
-                if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.18, 0.72) + ')';
-                if (av) {
-                    av.style.boxShadow   = isLight ? '0 0 16px rgba(0,0,0,.12)' : '0 0 25px rgba(255,255,255,.8)';
-                    av.style.borderColor = isLight ? 'rgba(18,12,12,.35)' : 'rgba(255,255,255,.8)';
-                }
-            } else if (val >= 40) {
-                hb.style.background = isLight
-                    ? 'linear-gradient(to right,rgba(18,12,12,.22),rgba(18,12,12,.60))'
-                    : 'linear-gradient(to right,rgba(255,255,255,.4),rgba(255,255,255,.9))';
-                hb.style.boxShadow = isLight ? 'none' : '0 0 10px rgba(255,255,255,.6)';
-                bg.style.setProperty('--breath-speed', '6s');
-                bg.classList.add('vibe-breathing');
-                if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.1, 0.62) + ')';
-                if (av) {
-                    av.style.boxShadow   = isLight ? '0 0 10px rgba(0,0,0,.07)' : '0 0 12px rgba(255,255,255,.4)';
-                    av.style.borderColor = isLight ? 'rgba(18,12,12,.22)' : 'rgba(255,255,255,.4)';
-                }
-            } else {
-                hb.style.background = isLight
-                    ? 'linear-gradient(to right,rgba(18,12,12,.12),rgba(18,12,12,.38))'
-                    : 'linear-gradient(to right,rgba(255,255,255,.2),rgba(255,255,255,.5))';
-                hb.style.boxShadow = isLight ? 'none' : '0 0 5px rgba(255,255,255,.2)';
-                bg.classList.remove('vibe-breathing');
-                if (dim) dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
-                if (av) {
-                    av.style.boxShadow   = isLight ? '0 6px 18px rgba(0,0,0,.06)' : '0 8px 20px rgba(0,0,0,.5)';
-                    av.style.borderColor = isLight ? 'rgba(18,12,12,.16)' : 'rgba(255,255,255,.25)';
-                }
-            }
-            updateStatusTag(heat);
-        });
+        if (val >= 75) {
+            hb.style.background = isLight
+                ? 'linear-gradient(to right,rgba(18,12,12,.40),rgba(18,12,12,.82))'
+                : 'linear-gradient(to right,rgba(255,255,255,.6),#fff)';
+            hb.style.boxShadow = isLight ? 'none' : '0 0 20px rgba(255,255,255,.9)';
+            bg.style.setProperty('--breath-speed', '3.5s');
+            bg.classList.add('vibe-breathing');
+            if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.18, 0.72) + ')';
+            av.style.boxShadow = isLight ? '0 0 16px rgba(0,0,0,.12)' : '0 0 25px rgba(255,255,255,.8)';
+            av.style.borderColor = isLight ? 'rgba(18,12,12,.35)' : 'rgba(255,255,255,.8)';
+        } else if (val >= 40) {
+            hb.style.background = isLight
+                ? 'linear-gradient(to right,rgba(18,12,12,.22),rgba(18,12,12,.60))'
+                : 'linear-gradient(to right,rgba(255,255,255,.4),rgba(255,255,255,.9))';
+            hb.style.boxShadow = isLight ? 'none' : '0 0 10px rgba(255,255,255,.6)';
+            bg.style.setProperty('--breath-speed', '6s');
+            bg.classList.add('vibe-breathing');
+            if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.1, 0.62) + ')';
+            av.style.boxShadow = isLight ? '0 0 10px rgba(0,0,0,.07)' : '0 0 12px rgba(255,255,255,.4)';
+            av.style.borderColor = isLight ? 'rgba(18,12,12,.22)' : 'rgba(255,255,255,.4)';
+        } else {
+            hb.style.background = isLight
+                ? 'linear-gradient(to right,rgba(18,12,12,.12),rgba(18,12,12,.38))'
+                : 'linear-gradient(to right,rgba(255,255,255,.2),rgba(255,255,255,.5))';
+            hb.style.boxShadow = isLight ? 'none' : '0 0 5px rgba(255,255,255,.2)';
+            bg.classList.remove('vibe-breathing');
+            if (dim) dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
+            av.style.boxShadow = isLight ? '0 6px 18px rgba(0,0,0,.06)' : '0 8px 20px rgba(0,0,0,.5)';
+            av.style.borderColor = isLight ? 'rgba(18,12,12,.16)' : 'rgba(255,255,255,.25)';
+        }
+        updateStatusTag(heat);
     }
 
     var VOICE_LINES = {
@@ -1212,13 +1174,8 @@
     }
 
     function scrollBot() {
-        var container = document.getElementById('lensChatContainer');
-        if (!container) return;
-        requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-                container.scrollTop = container.scrollHeight;
-            });
-        });
+        var a = document.getElementById('lensAnchor');
+        if (a) a.scrollIntoView({ behavior: 'smooth' });
     }
 
     function bindContainerDelegate() {

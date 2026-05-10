@@ -1144,7 +1144,6 @@
     }
 
     function cdAddMsg(area, text, type, timeStr, statusText, animate) {
-        var isScrollArea = area && area.nodeType === 1;
         var row = document.createElement('div');
         row.className = 'msg-row ' + (type === 'sent' ? 'row-sent' : 'row-received');
         /* 注入星星角标和 meta 标签结构，供 lp-lifted 效果使用 */
@@ -1245,15 +1244,9 @@
             });
         }
 
-        if (isScrollArea) {
-            area.appendChild(row);
-            requestAnimationFrame(function () {
-                requestAnimationFrame(function () {
-                    area.scrollTop = area.scrollHeight;
-                });
-            });
-        } else if (area && area.nodeType === 11) {
-            area.appendChild(row);
+        area.appendChild(row);
+        if (area.nodeType === 1) {
+            setTimeout(function () { area.scrollTop = area.scrollHeight; }, 10);
         }
         if (typeof checkAutoSum === 'function') checkAutoSum();
         return row;
