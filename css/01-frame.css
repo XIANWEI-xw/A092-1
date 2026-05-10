@@ -1,0 +1,122 @@
+#app-root {
+    position: absolute; 
+    inset: 0;
+    width: 100%;
+    height: var(--app-height, 100vh); /* 🔪 终极修复 v3：统一使用 --app-height，确保 iOS 全屏覆盖 */
+    min-height: var(--app-height, 100vh);
+    overflow: hidden;
+    background-color: transparent;
+    z-index: 1;
+}
+
+/* --- 主屏幕容器 --- */
+.screen {
+    position: absolute; 
+    inset: 0;
+    width: 100%;
+    height: var(--app-height, 100vh); /* 🔪 终极修复 v3：统一使用 --app-height，确保 iOS 全屏覆盖 */
+    background: linear-gradient(180deg, #fdfdfd 0%, #e5e5ea 100%);
+    background-size: cover !important; 
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 1; 
+}
+         /* 沉浸全屏模式：如果你在设置里打开全屏，才让它剥离边框充满屏幕 */
+         .iphone-frame.fullscreen-mode { 
+         width: 100vw !important; 
+         height: 100dvh !important; 
+         max-width: 100% !important; 
+         max-height: 100% !important; 
+         border-radius: 0 !important; 
+         box-shadow: none !important; 
+         border: none !important; 
+         overflow: hidden !important;
+         position: fixed !important;
+         top: 0;
+         left: 0;
+         }
+         .iphone-frame.fullscreen-mode .nav-header, .iphone-frame.fullscreen-mode .nav-bar { 
+         padding-top: max(env(safe-area-inset-top), 15px) !important; 
+         height: auto; 
+         min-height: 65px; 
+         }
+         /* 独家定制：不规则曲奇饼简约四孔纽扣开关 (等比例缩小版) */
+         input[type="checkbox"].btn-switch {
+         appearance: none; -webkit-appearance: none; 
+         width: 26px; height: 26px; /* 外框从 32px 缩小到 26px */
+         border-radius: 42% 58% 48% 52% / 54% 46% 55% 45%;
+         border: 1.5px solid var(--c-black); /* 边框稍微变细一点点保持比例 */
+         background: var(--c-white);
+         position: relative; cursor: pointer; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+         margin: 0; outline: none; flex-shrink: 0; box-shadow: 1px 2px 0px rgba(0,0,0,0.08);
+         }
+         input[type="checkbox"].btn-switch::after {
+         content: ''; position: absolute; 
+         width: 16px; height: 16px; /* 内部四孔区域从 20px 缩小到 16px */
+         top: 50%; left: 50%; transform: translate(-50%, -50%);
+         background-image: 
+         radial-gradient(circle, var(--c-black) 15%, transparent 18%),
+         radial-gradient(circle, var(--c-black) 15%, transparent 18%),
+         radial-gradient(circle, var(--c-black) 15%, transparent 18%),
+         radial-gradient(circle, var(--c-black) 15%, transparent 18%);
+         background-size: 8px 8px; /* 每个洞的尺寸从 10 缩到 8 */
+         background-position: 0 0, 8px 0, 0 8px, 8px 8px; /* 四个洞的坐标精确卡位 */
+         background-repeat: no-repeat; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+         }
+         input[type="checkbox"].btn-switch:checked { 
+         background: var(--c-black); border-color: var(--c-black);
+         border-radius: 52% 48% 55% 45% / 46% 54% 45% 55%;
+         transform: rotate(180deg) scale(0.96); box-shadow: 0 0 0 1.5px var(--c-card); 
+         }
+         input[type="checkbox"].btn-switch:checked::after { 
+         background-image: 
+         radial-gradient(circle, var(--c-white) 15%, transparent 18%),
+         radial-gradient(circle, var(--c-white) 15%, transparent 18%),
+         radial-gradient(circle, var(--c-white) 15%, transparent 18%),
+         radial-gradient(circle, var(--c-white) 15%, transparent 18%);
+         }
+/* 核心修复：增加 visibility 属性，彻底杜绝 iOS 键盘弹出时导致的下方窗口露头 Bug */
+.app-window { 
+    width: 100%; 
+    height: 100%; 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    background: var(--c-bg); 
+    z-index: 10; 
+    display: flex; 
+    flex-direction: column; 
+    transform: translateY(100%); 
+    opacity: 0; 
+    visibility: hidden;
+    pointer-events: none; 
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, visibility 0s 0.4s; 
+    padding-bottom: var(--safe-bottom); 
+    overscroll-behavior: none; 
+}
+.app-window.active { 
+    transform: translateY(0); 
+    opacity: 1; 
+    visibility: visible;
+    pointer-events: auto; 
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, visibility 0s 0s;
+}
+         .view-container { width: 100%; height: calc(100% - 70px); position: absolute; top: 0; left: 0; background: transparent; transition: transform 0.3s ease; display: flex; flex-direction: column; opacity: 0; pointer-events: none; padding-bottom: 10px;}
+         .view-container.active { opacity: 1; pointer-events: auto; z-index: 2; }
+         #view-chat { height: 100%; z-index: 20; transform: translateX(100%); opacity: 1; pointer-events: auto; transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); background: var(--c-bg); }
+         #view-chat.slide-in { transform: translateX(0); }
+         /* ===== 全新功能：动态圆角悬浮顶栏模式 ===== */
+         body.nav-rounded-mode .chat-nav-bar {
+         position: absolute !important; top: 0; left: 0; width: 100%; z-index: 100;
+         border-radius: 0 0 28px 28px !important;
+         box-shadow: 0 8px 30px rgba(0,0,0,0.04) !important;
+         overflow: hidden; -webkit-mask-image: -webkit-radial-gradient(white, black); transform: translateZ(0);
+         }
+body.nav-rounded-mode .chat-area {
+    padding-top: calc(var(--nav-height) + var(--safe-top) + 20px) !important;
+}

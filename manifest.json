@@ -1,0 +1,27 @@
+{
+  "name": "A0nynx_3i",
+  "short_name": "A0nynx_3i",
+  "id": "./index.html",
+  "description": "A0nynx_3i — Studio Zero Standalone App",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "lang": "zh-CN",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://chatbotcos.weixin.qq.com/chatbot/30-openaiassets_25bb7ee042e09f9b90273daf8cb56699_4818891778186903087.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://chatbotcos.weixin.qq.com/chatbot/30-openaiassets_25bb7ee042e09f9b90273daf8cb56699_4818891778186903087.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
