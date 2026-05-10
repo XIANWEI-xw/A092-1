@@ -149,7 +149,10 @@
             if (appEl) appEl.classList.remove('lens-light');
         }
         var dim = document.getElementById('lensBgDim');
-        if (dim) dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
+        if (dim) {
+            dim.style.willChange = 'opacity';
+            dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
+        }
         updateHeat(heat);
     }
 
@@ -245,7 +248,7 @@
 
             '#lensListPage{background:#050810;overflow-y:auto;scrollbar-width:none;position:absolute;inset:0;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensListPage::-webkit-scrollbar{display:none}' +
-            '#lensListCanvas{position:absolute;inset:0;z-index:0;pointer-events:none}' +
+            '#lensListCanvas{position:absolute;inset:0;z-index:0;pointer-events:none;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
             '#lensApp .list-content{position:relative;z-index:2;padding:0 0 60px}' +
             '#lensApp .lens-close-float{position:absolute;top:50px;left:20px;z-index:20;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.05);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform}' +
             '#lensApp .lens-close-float:active{-webkit-transform:translateZ(0) scale(.9);transform:translateZ(0) scale(.9)}' +
@@ -275,13 +278,13 @@
             '#lensApp .char-arrow{position:absolute;right:20px;bottom:22px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center}' +
             '#lensApp .char-arrow svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2}' +
 
-            '#lensChatPage{background:#050810;display:flex;flex-direction:column;position:absolute;inset:0}' +
-            '#lensChatPage.hidden{transform:translateX(30px)}' +
-            '#lensApp .bg-container{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;image-rendering:-webkit-optimize-contrast;transition:transform 1.5s ease}' +
-            '#lensApp .bg-dim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.45);pointer-events:none;transition:background .8s ease;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
-            '@keyframes lk-deep-breath{0%,100%{transform:scale(1) translateZ(0)}50%{transform:scale(1.04) translateZ(0)}}' +
-            '#lensApp .vibe-breathing{animation:lk-deep-breath var(--breath-speed,6s) infinite ease-in-out}' +
-            '#lensPartCanvas{position:absolute;inset:0;z-index:1;pointer-events:none}' +
+            '#lensChatPage{background:#050810;display:flex;flex-direction:column;position:absolute;inset:0;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
+            '#lensChatPage.hidden{transform:translate3d(30px,0,0);}' +
+            '#lensApp .bg-container{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);will-change:transform;image-rendering:-webkit-optimize-contrast;transition:transform 1.5s ease;backface-visibility:hidden;-webkit-backface-visibility:hidden;isolation:isolate;}' +
+            '#lensApp .bg-dim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.45);pointer-events:none;transition:background .8s ease;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);will-change:opacity;backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
+            '@keyframes lk-deep-breath{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(0,0,0) scale(1.04)}}' +
+            '#lensApp .vibe-breathing{animation:lk-deep-breath var(--breath-speed,6s) infinite ease-in-out;will-change:transform;}' +
+            '#lensPartCanvas{position:absolute;inset:0;z-index:1;pointer-events:none;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden;}' +
             '#lensApp .app{position:relative;z-index:2;display:flex;flex-direction:column;height:100%}' +
 
             '#lensApp .header{position:absolute;top:0;left:0;right:0;padding:44px 20px 12px;display:flex;align-items:center;justify-content:space-between;z-index:30}' +
@@ -1037,46 +1040,57 @@
 
     function updateHeat(val) {
         heat = parseInt(val, 10);
-        document.getElementById('lensHeatVal').innerText = val + '%';
-        var hb = document.getElementById('lensHeatBar');
-        hb.style.width = val + '%';
-        var bg = document.getElementById('lensBg');
+        var heatValEl = document.getElementById('lensHeatVal');
+        if (heatValEl) heatValEl.innerText = val + '%';
+        var hb  = document.getElementById('lensHeatBar');
+        var bg  = document.getElementById('lensBg');
         var dim = document.getElementById('lensBgDim');
-        var av = document.getElementById('lensAvatarWrap');
+        var av  = document.getElementById('lensAvatarWrap');
         var appEl = document.getElementById('lensApp');
+        if (!hb || !bg) return;
         var isLight = appEl && appEl.classList.contains('lens-light');
 
-        if (val >= 75) {
-            hb.style.background = isLight
-                ? 'linear-gradient(to right,rgba(18,12,12,.40),rgba(18,12,12,.82))'
-                : 'linear-gradient(to right,rgba(255,255,255,.6),#fff)';
-            hb.style.boxShadow = isLight ? 'none' : '0 0 20px rgba(255,255,255,.9)';
-            bg.style.setProperty('--breath-speed', '3.5s');
-            bg.classList.add('vibe-breathing');
-            if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.18, 0.72) + ')';
-            av.style.boxShadow = isLight ? '0 0 16px rgba(0,0,0,.12)' : '0 0 25px rgba(255,255,255,.8)';
-            av.style.borderColor = isLight ? 'rgba(18,12,12,.35)' : 'rgba(255,255,255,.8)';
-        } else if (val >= 40) {
-            hb.style.background = isLight
-                ? 'linear-gradient(to right,rgba(18,12,12,.22),rgba(18,12,12,.60))'
-                : 'linear-gradient(to right,rgba(255,255,255,.4),rgba(255,255,255,.9))';
-            hb.style.boxShadow = isLight ? 'none' : '0 0 10px rgba(255,255,255,.6)';
-            bg.style.setProperty('--breath-speed', '6s');
-            bg.classList.add('vibe-breathing');
-            if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.1, 0.62) + ')';
-            av.style.boxShadow = isLight ? '0 0 10px rgba(0,0,0,.07)' : '0 0 12px rgba(255,255,255,.4)';
-            av.style.borderColor = isLight ? 'rgba(18,12,12,.22)' : 'rgba(255,255,255,.4)';
-        } else {
-            hb.style.background = isLight
-                ? 'linear-gradient(to right,rgba(18,12,12,.12),rgba(18,12,12,.38))'
-                : 'linear-gradient(to right,rgba(255,255,255,.2),rgba(255,255,255,.5))';
-            hb.style.boxShadow = isLight ? 'none' : '0 0 5px rgba(255,255,255,.2)';
-            bg.classList.remove('vibe-breathing');
-            if (dim) dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
-            av.style.boxShadow = isLight ? '0 6px 18px rgba(0,0,0,.06)' : '0 8px 20px rgba(0,0,0,.5)';
-            av.style.borderColor = isLight ? 'rgba(18,12,12,.16)' : 'rgba(255,255,255,.25)';
-        }
-        updateStatusTag(heat);
+        requestAnimationFrame(function () {
+            hb.style.width = val + '%';
+
+            if (val >= 75) {
+                hb.style.background = isLight
+                    ? 'linear-gradient(to right,rgba(18,12,12,.40),rgba(18,12,12,.82))'
+                    : 'linear-gradient(to right,rgba(255,255,255,.6),#fff)';
+                hb.style.boxShadow = isLight ? 'none' : '0 0 20px rgba(255,255,255,.9)';
+                bg.style.setProperty('--breath-speed', '3.5s');
+                bg.classList.add('vibe-breathing');
+                if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.18, 0.72) + ')';
+                if (av) {
+                    av.style.boxShadow   = isLight ? '0 0 16px rgba(0,0,0,.12)' : '0 0 25px rgba(255,255,255,.8)';
+                    av.style.borderColor = isLight ? 'rgba(18,12,12,.35)' : 'rgba(255,255,255,.8)';
+                }
+            } else if (val >= 40) {
+                hb.style.background = isLight
+                    ? 'linear-gradient(to right,rgba(18,12,12,.22),rgba(18,12,12,.60))'
+                    : 'linear-gradient(to right,rgba(255,255,255,.4),rgba(255,255,255,.9))';
+                hb.style.boxShadow = isLight ? 'none' : '0 0 10px rgba(255,255,255,.6)';
+                bg.style.setProperty('--breath-speed', '6s');
+                bg.classList.add('vibe-breathing');
+                if (dim) dim.style.background = 'rgba(0,0,0,' + Math.min(baseDimOpacity + 0.1, 0.62) + ')';
+                if (av) {
+                    av.style.boxShadow   = isLight ? '0 0 10px rgba(0,0,0,.07)' : '0 0 12px rgba(255,255,255,.4)';
+                    av.style.borderColor = isLight ? 'rgba(18,12,12,.22)' : 'rgba(255,255,255,.4)';
+                }
+            } else {
+                hb.style.background = isLight
+                    ? 'linear-gradient(to right,rgba(18,12,12,.12),rgba(18,12,12,.38))'
+                    : 'linear-gradient(to right,rgba(255,255,255,.2),rgba(255,255,255,.5))';
+                hb.style.boxShadow = isLight ? 'none' : '0 0 5px rgba(255,255,255,.2)';
+                bg.classList.remove('vibe-breathing');
+                if (dim) dim.style.background = 'rgba(0,0,0,' + baseDimOpacity + ')';
+                if (av) {
+                    av.style.boxShadow   = isLight ? '0 6px 18px rgba(0,0,0,.06)' : '0 8px 20px rgba(0,0,0,.5)';
+                    av.style.borderColor = isLight ? 'rgba(18,12,12,.16)' : 'rgba(255,255,255,.25)';
+                }
+            }
+            updateStatusTag(heat);
+        });
     }
 
     var VOICE_LINES = {
