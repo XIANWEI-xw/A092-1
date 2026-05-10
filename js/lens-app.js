@@ -156,7 +156,11 @@
         updateHeat(heat);
     }
 
+    var _narrCache = {};
+
     function parseNarr(text) {
+        if (_narrCache[text]) return _narrCache[text];
+
         var h = esc(text);
         h = h.replace(/\[ACT\]([\s\S]*?)\[\/ACT\]/gi, function(_, c) {
             return '<span class="act">' + c.replace(/\n+/g, ' ').trim() + '</span>';
@@ -175,7 +179,10 @@
         if (h.indexOf('<span') === -1) {
             h = '<span class="act">' + h + '</span>';
         }
-        return '<div class="narr">' + h + '</div>';
+        var result = '<div class="narr">' + h + '</div>';
+        if (Object.keys(_narrCache).length > 200) _narrCache = {};
+        _narrCache[text] = result;
+        return result;
     }
 
     var ARCHITECT_STYLE = 'System Instruction: The Humanistic Architect & Literary Soul\n\n' +
@@ -916,43 +923,102 @@
 
     function renderConvToDOM(msgs, isLoadMore) {
         var container = document.getElementById('lensChatContainer');
-        var typing = document.getElementById('lensTyping');
+        var typing    = document.getElementById('lensTyping');
+        if (!container || !typing) return;
 
         var oldHeight = container.scrollHeight;
 
-        while (container.firstChild && container.firstChild !== typing) container.removeChild(container.firstChild);
+        while (container.firstChild && container.firstChild !== typing) {
+            container.removeChild(container.firstChild);
+        }
         if (!msgs.length) return;
 
         var startIdx = Math.max(0, msgs.length - lensDisplayLimit);
-        var visible = msgs.slice(startIdx);
+        var visible  = msgs.slice(startIdx);
 
-        var html = '';
-        if (startIdx > 0) {
-            html += '<div class="lens-load-hint" style="text-align:center;padding:20px 0 10px;font-family:\'Syncopate\',sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;" id="lensLoadMore">— LOAD MORE —</div>';
-        }
-        for (var i = 0; i < visible.length; i++) {
-            html += buildMsgHTML(visible[i], startIdx + i);
-        }
-
-        var wrap = document.createElement('div');
-        wrap.innerHTML = html;
         var frag = document.createDocumentFragment();
-        while (wrap.firstChild) frag.appendChild(wrap.firstChild);
-        container.insertBefore(frag, typing);
 
-        if (isLoadMore) {
-            container.scrollTop = container.scrollHeight - oldHeight;
-        } else {
-            scrollBot();
-        }
-
-        var loadMoreBtn = document.getElementById('lensLoadMore');
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', function() {
+        if (startIdx > 0) {
+            var hint = document.createElement('div');
+            hint.id = 'lensLoadMore';
+            hint.style.cssText = 'text-align:center;padding:20px 0 10px;font-family:"Syncopate",sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;';
+            hint.textContent = '— LOAD MORE —';
+            hint.addEventListener('click', function() {
                 lensDisplayLimit += 15;
                 renderConvToDOM(curMessages, true);
             });
+            frag.appendChild(hint);
         }
+
+        var BATCH = 8;
+        var total = visible.length;
+
+        function appendBatch(start) {
+            var batchFrag = document.createDocumentFragment();
+            var end = Math.min(start + BATCH, total);
+            for (var i = start; i < end; i++) {
+                var m   = visible[i];
+                var idx = startIdx + i;
+                var el  = buildMsgEl(m, idx);
+                batchFrag.appendChild(el);
+            }
+            container.insertBefore(batchFrag, typing);
+
+            if (end < total) {
+                requestAnimationFrame(function() { appendBatch(end); });
+            } else {
+                if (isLoadMore) {
+                    container.scrollTop = container.scrollHeight - oldHeight;
+                } else {
+                    requestAnimationFrame(function() {
+                        container.scrollTop = container.scrollHeight;
+                    });
+                }
+            }
+        }
+
+        container.insertBefore(frag, typing);
+        appendBatch(0);
+    }
+
+    function buildMsgEl(m, idx) {
+        var el = document.createElement('div');
+        el.dataset.msgIdx  = idx;
+        el.dataset.msgRole = m.role === 'assistant' ? 'assistant' : (m.isDirector ? 'director' : 'user');
+
+        if (m.role === 'user' && m.isDirector) {
+            el.className = 'msg-row msg-director';
+            var card = document.createElement('div');
+            card.className = 'director-card';
+            var hdr = document.createElement('div');
+            hdr.className = 'dir-header';
+            hdr.textContent = 'DIRECTOR OVERRIDE';
+            card.appendChild(hdr);
+            if (m.scene) {
+                var sc = document.createElement('div');
+                sc.className = 'dir-section';
+                sc.innerHTML = '<span class="dir-label">SCENE</span><div class="dir-scene-text">' + esc(m.scene) + '</div>';
+                card.appendChild(sc);
+            }
+            if (m.dlg) {
+                var dl = document.createElement('div');
+                dl.className = 'dir-section';
+                dl.innerHTML = '<span class="dir-label">DIALOGUE</span><div class="dir-dlg-text">\u201C' + esc(m.dlg) + '\u201D</div>';
+                card.appendChild(dl);
+            }
+            el.appendChild(card);
+        } else if (m.role === 'user') {
+            el.className = 'msg-row msg-user';
+            var ut = document.createElement('div');
+            ut.className   = 'user-text';
+            ut.textContent = m.text;
+            el.appendChild(ut);
+        } else {
+            el.className = 'msg-row msg-ai';
+            el.innerHTML = parseNarr(m.text);
+        }
+
+        return el;
     }
 
     function enterChat(entId) {
