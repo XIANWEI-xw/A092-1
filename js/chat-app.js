@@ -929,7 +929,7 @@
     function openChat(entId) {
         var isSameChat = (currentChatId === entId);
         currentChatId = entId;
-        cdDisplayLimit = 25;
+        cdDisplayLimit = 18;
         var ent = entities.find(function (e) { return e.id === entId; });
         if (!ent) return;
 
@@ -1024,7 +1024,56 @@
         return String(hr12).padStart(2,'0') + ':' + String(mn).padStart(2,'0') + ' ' + ampm;
     }
 
-    var cdDisplayLimit = 15;
+    var cdDisplayLimit = 18;
+
+    function checkAndPaginateLive() {
+        if (!currentChatId) return;
+        var area = document.getElementById('cdChatArea');
+        if (!area) return;
+        var msgs = conversations[currentChatId] || [];
+        if (msgs.length <= cdDisplayLimit) return;
+
+        var rows = Array.from(area.querySelectorAll('.msg-row:not(#cdTypingRow)'));
+        if (rows.length <= 18) return;
+
+        var excess = rows.length - 18;
+        for (var i = 0; i < excess; i++) {
+            if (rows[i] && rows[i].parentNode) rows[i].parentNode.removeChild(rows[i]);
+        }
+
+        if (!document.getElementById('cdLoadSentinel')) {
+            var startIdx = msgs.length - cdDisplayLimit;
+            var sentinel = document.createElement('div');
+            sentinel.className = 'cd-load-hint';
+            sentinel.id = 'cdLoadSentinel';
+            sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
+            sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(startIdx / 18) + '</div><div class="lh-line"></div>';
+            sentinel.onclick = function(e) {
+                e.stopPropagation();
+                if (cdDisplayLimit < (conversations[currentChatId] || []).length) {
+                    cdDisplayLimit += 18;
+                    renderMessages(currentChatId, true);
+                }
+            };
+            sentinel.ontouchend = function(e) {
+                e.stopPropagation();
+                if (cdDisplayLimit < (conversations[currentChatId] || []).length) {
+                    cdDisplayLimit += 18;
+                    renderMessages(currentChatId, true);
+                }
+            };
+            var sysMsg = area.querySelector('.sys-msg');
+            var firstRow = area.querySelector('.msg-row:not(#cdTypingRow)');
+            if (sysMsg && sysMsg.nextSibling) {
+                area.insertBefore(sentinel, sysMsg.nextSibling);
+            } else if (firstRow) {
+                area.insertBefore(sentinel, firstRow);
+            } else {
+                area.insertBefore(sentinel, area.firstChild);
+            }
+        }
+    }
+
     function renderMessages(entId, isLoadMore) {
         var area = document.getElementById('cdChatArea');
         var allMsgs = conversations[entId] || [];
@@ -1047,7 +1096,7 @@
             loadHint.className = 'cd-load-hint';
             loadHint.id = 'cdLoadSentinel';
             loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
-            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(startIdx/15) + '</div><div class="lh-line"></div>';
+            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(startIdx/18) + '</div><div class="lh-line"></div>';
             fragment.appendChild(loadHint);
         }
 
@@ -1119,7 +1168,7 @@
                 e.stopPropagation();
                 var msgs = conversations[currentChatId] || [];
                 if (cdDisplayLimit < msgs.length) {
-                    cdDisplayLimit += 15;
+                    cdDisplayLimit += 18;
                     renderMessages(currentChatId, true);
                 }
             };
@@ -1127,7 +1176,7 @@
                 e.stopPropagation();
                 var msgs = conversations[currentChatId] || [];
                 if (cdDisplayLimit < msgs.length) {
-                    cdDisplayLimit += 15;
+                    cdDisplayLimit += 18;
                     renderMessages(currentChatId, true);
                 }
             };
@@ -1245,11 +1294,12 @@
         }
 
         area.appendChild(row);
-        if (area.nodeType === 1) {
-            setTimeout(function () { area.scrollTop = area.scrollHeight; }, 10);
-        }
-        if (typeof checkAutoSum === 'function') checkAutoSum();
-        return row;
+    if (area.nodeType === 1) {
+        setTimeout(function () { area.scrollTop = area.scrollHeight; }, 10);
+        checkAndPaginateLive();
+    }
+    if (typeof checkAutoSum === 'function') checkAutoSum();
+    return row;
     }
 
     function cdAddTyping(area, explicitChatId) {
