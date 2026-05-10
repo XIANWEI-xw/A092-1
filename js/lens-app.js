@@ -358,8 +358,8 @@
 
             '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;}' +
             '#lensApp .chat-scroll::-webkit-scrollbar{display:none}' +
-            '#lensApp .msg-row{animation:lk-fadeIn .3s ease-out forwards;opacity:0;contain:layout style;cursor:pointer;-webkit-tap-highlight-color:transparent;}' +
-            '@keyframes lk-fadeIn{to{opacity:1}}' +
+            '#lensApp .msg-row{opacity:0;contain:layout style;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .3s ease-out;}' +
+            '#lensApp .msg-row.visible{opacity:1;}' +
             '@keyframes lk-msg-dissolve{' +
                 '0%{opacity:1;-webkit-transform:translateZ(0) translateY(0) scale(1);transform:translateZ(0) translateY(0) scale(1);filter:blur(0px)}' +
                 '30%{opacity:.7;-webkit-transform:translateZ(0) translateY(-6px) scale(1.01);transform:translateZ(0) translateY(-6px) scale(1.01);filter:blur(0.5px)}' +
@@ -953,22 +953,39 @@
         var BATCH = 8;
         var total = visible.length;
 
+        var isScrolling = false;var scrollTid = 0;
+        container.addEventListener('scroll', function() {
+            isScrolling = true;
+            clearTimeout(scrollTid);
+            scrollTid = setTimeout(function() { isScrolling = false; }, 150);
+        }, { passive: true });
+
         function appendBatch(start) {
             var batchFrag = document.createDocumentFragment();
-            var end = Math.min(start + BATCH, total);
-            for (var i = start; i < end; i++) {
+            var end = Math.min(start + BATCH, total);for (var i = start; i < end; i++) {
                 var m   = visible[i];
                 var idx = startIdx + i;
                 var el  = buildMsgEl(m, idx);
                 batchFrag.appendChild(el);
             }
-            container.insertBefore(batchFrag, typing);
 
+            if (isScrolling) {
+                setTimeout(function() {
+                    container.insertBefore(batchFrag, typing);
+                    afterBatch(end);
+                }, 50);
+            } else {
+                container.insertBefore(batchFrag, typing);
+                afterBatch(end);
+            }
+        }
+
+        function afterBatch(end) {
             if (end < total) {
                 requestAnimationFrame(function() { appendBatch(end); });
             } else {
                 if (isLoadMore) {
-                    container.scrollTop = container.scrollHeight - oldHeight;
+                    container.scrollTop = container.scrollHeight- oldHeight;
                 } else {
                     requestAnimationFrame(function() {
                         container.scrollTop = container.scrollHeight;
@@ -985,6 +1002,7 @@
         var el = document.createElement('div');
         el.dataset.msgIdx  = idx;
         el.dataset.msgRole = m.role === 'assistant' ? 'assistant' : (m.isDirector ? 'director' : 'user');
+        el.classList.add('visible');
 
         if (m.role === 'user' && m.isDirector) {
             el.className = 'msg-row msg-director';
