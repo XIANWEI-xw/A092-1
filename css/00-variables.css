@@ -1,0 +1,68 @@
+/* 00-variables.css */
+
+:root {
+    /* ── Couture OS 主题色 ── */
+    --bg-base:        #F8F8FA;
+    --ink-black:      #151517;
+    --icon-color:     #48484A;
+    --accent-white:   #FFFFFF;
+    --glass-panel:    rgba(255, 255, 255, 0.65);
+    --glass-blur:     blur(25px) saturate(130%);
+    --subtle-line:    rgba(21, 21, 23, 0.06);
+
+    /* ── 原框架兼容变量 ── */
+    --c-bg:           var(--bg-base);
+    --c-card:         #FFFFFF;
+    --c-gray-light:   #F3F2EF;
+    --c-gray-mid:     #D6D3CF;
+    --c-gray-dark:    #A8A39D;
+    --c-black:        #4A4642;
+    --c-white:        #FFFFFF;
+    --u-bg:           var(--bg-base);
+    --u-color:        var(--ink-black);
+    --safe-bottom:    env(safe-area-inset-bottom, 20px);
+    --safe-top:       env(safe-area-inset-top, 44px);
+    --nav-height:     60px;
+}
+
+body.is-android {
+    --safe-top: 30px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    background-color: #D1D1D6;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100dvh;
+    overflow: hidden;
+}
+
+html, body {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+body {
+    position: fixed;
+    inset: 0;
+}
+
+input, textarea, select {
+    -webkit-user-select: auto !important;
+    user-select: auto !important;
+    font-family: inherit !important;
+}
