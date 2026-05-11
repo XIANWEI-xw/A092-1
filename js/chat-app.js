@@ -1217,7 +1217,7 @@
                 isMessagesLoading = true;
                 el.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
                 cdDisplayLimit += 18;
-                renderMessages(currentChatId, true);
+                renderConvToDOM(conversations[currentChatId], true);
             }
         };
         el.onclick = fn;
@@ -1241,22 +1241,16 @@
             row.classList.add('no-anim');
         }
 
-        if (cdLastMsgType === type && cdLastMsgRow) {
-            cdLastMsgRow.classList.add('grouped');
-        }
-        cdLastMsgType = type;
-        cdLastMsgRow = row;
-
         var metaHtml = makeMetaHtml(type, statusText, timeStr);
 
         var mainText = text;
         var transText = '';
-        if (text.indexOf('|||TRANS|||') !== -1) {
+        if (text && text.indexOf('|||TRANS|||') !== -1) {
             var parts = text.split('|||TRANS|||');
             mainText = parts[0].trim();
             transText = parts[1] ? parts[1].trim() : '';
         }
-        var mainHtml = escapeHtml(mainText);
+        var mainHtml = escapeHtml(mainText || '');
         var transHtml = transText ? escapeHtml(transText) : '';
 
         var bubbleHtml = '';
@@ -1266,7 +1260,6 @@
             if (transConfig.style === 'seamless') transInner = '<div class="trans-content">' + transHtml + '</div>';
             else if (transConfig.style === 'obsidian') transInner = '<div class="trans-block">' + transHtml + '</div>';
             else if (transConfig.style === 'editorial') transInner = '<div class="trans-editorial">' + transHtml + '</div>';
-
             row.classList.add('has-trans', transClass);
             bubbleHtml = '<div class="msg-text">' + mainHtml + '</div><div class="expand-wrapper"><div class="expand-inner">' + transInner + '</div></div>';
         } else {
@@ -1286,36 +1279,31 @@
         } else {
             var userInitial = 'U';
             var masks = [];
-            try { masks = JSON.parse(localStorage.getItem('ca-user-masks') || '[]'); } catch(e){}
+            try { masks = JSON.parse(localStorage.getItem('ca-user-masks') || '[]'); } catch(e) {}
             var activeMask = masks.find(function(m) { return m.active; });
             if (activeMask && activeMask.name) userInitial = getInitial(activeMask.name);
-
             var avInnerMe = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#151515;color:#fff;font-size:14px;font-weight:700;">' + userInitial + '</div>';
             if (activeMask && activeMask.avatar) {
                 avInnerMe = '<img src="' + activeMask.avatar + '" style="width:100%;height:100%;object-fit:cover;">';
             }
             avatarDOM = '<div class="msg-avatar">' + avInnerMe + '</div>';
         }
-        var contentHtml = '<div class="msg-content-wrap">' + avatarDOM + '<div class="bubble">' + bubbleHtml + '</div></div>';
 
+        var contentHtml = '<div class="msg-content-wrap">' + avatarDOM + '<div class="bubble">' + bubbleHtml + '</div></div>';
         row.innerHTML = '<div class="msg-checkbox"></div>' + contentHtml + '<div class="msg-meta">' + metaHtml + '</div>';
 
-        /* 注入 Weight Drop 所需的粉尘、星标、meta */
         (function() {
             var bEl = row.querySelector('.bubble');
             if (!bEl) return;
             bEl.style.position = 'relative';
-
             var dustEl = document.createElement('div');
             dustEl.className = 'lp-wd-dust';
             dustEl.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
             bEl.appendChild(dustEl);
-
             var starBadge = document.createElement('div');
             starBadge.className = 'lp-star-badge';
             starBadge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
             bEl.appendChild(starBadge);
-
             var metaTag = document.createElement('div');
             metaTag.className = 'lp-bubble-meta';
             metaTag.textContent = 'MSG_' + String(Math.floor(Math.random() * 9000) + 1000);
@@ -1325,7 +1313,7 @@
         if (transText && transConfig.style !== 'off') {
             var bubbleEl = row.querySelector('.bubble');
             bubbleEl.style.cursor = 'pointer';
-            bubbleEl.addEventListener('click', function(e) {
+            bubbleEl.addEventListener('click', function() {
                 if (!document.getElementById('caChatDetail').classList.contains('multi-mode')) {
                     row.classList.toggle('trans-active');
                 }
@@ -1334,12 +1322,12 @@
 
         area.appendChild(row);
 
-        /* 批量加载时不触发滚动和分页，单条新消息时才触发 */
         if (!isBatch) {
-            if (area.nodeType === 1) {
-                setTimeout(function () { area.scrollTop = area.scrollHeight; }, 10);
-                checkAndPaginateLive();
-            }
+            setTimeout(function() {
+                var a = document.getElementById('cdChatArea');
+                if (a) a.scrollTop = a.scrollHeight;
+            }, 10);
+            cdUpdateGrouping(document.getElementById('cdChatArea'));
             if (typeof checkAutoSum === 'function') checkAutoSum();
         }
 
@@ -2384,7 +2372,7 @@
                     saveOneConversation(_ent.id);
                     
                     if (currentChatId === _ent.id) {
-                        renderMessages(_ent.id);
+                        renderConvToDOM(conversations[_ent.id] || [], false);
                     }
                     renderChats();
                     
@@ -3038,7 +3026,7 @@
                 transConfig.style = this.dataset.style;
                 saveTransConfig();
                 updateTransUI();
-                if (currentChatId) renderMessages(currentChatId);
+                if (currentChatId) renderConvToDOM(conversations[currentChatId] || [], false);
             });
         });
 
@@ -3386,7 +3374,7 @@
 
                 conversations[currentChatId] = [];
                 saveOneConversation(currentChatId);
-                renderMessages(currentChatId);
+                renderConvToDOM(conversations[currentChatId] || [], false);
 
                 setTimeout(() => {
                     flash.style.opacity = '1';
@@ -3729,7 +3717,7 @@
                     msgs[index].text = newText;
                     saveOneConversation(chatId);
                     closeContextMenu();
-                    renderMessages(chatId);
+                    renderConvToDOM(conversations[chatId] || [], false);
                 } else {
                     closeContextMenu();
                 }
@@ -3894,7 +3882,7 @@
                     
                     conversations[chatId] = msgs.slice(0, index + 1);
                     saveOneConversation(chatId);
-                    renderMessages(chatId);
+                    renderConvToDOM(conversations[chatId] || [], false);
                     
                     requestAnimationFrame(function () {
                         var area2 = document.getElementById('cdChatArea');
@@ -3919,7 +3907,7 @@
                     conversations[chatId] = msgs.slice(0, searchIdx + 1);
                     saveOneConversation(chatId);
                     closeContextMenu();
-                    renderMessages(chatId);
+                    renderConvToDOM(conversations[chatId] || [], false);
 
                     /* 立即同步全局打字状态，确保退出界面后列表显示正确 */
                     typingStateMap[chatId] = true;
@@ -4212,7 +4200,7 @@
                     msDelHint.classList.remove('show');
 
                     cdDisplayLimit = 18;
-                    renderMessages(currentChatId);
+                    renderConvToDOM(conversations[currentChatId] || [], false);
                     renderChats();
                 }, 380);
             }
@@ -5085,7 +5073,7 @@
                 if (confirm('Clear all messages?')) {
                     conversations[currentChatId] = [];
                     saveOneConversation(currentChatId);
-                    renderMessages(currentChatId);
+                    renderConvToDOM(conversations[currentChatId] || [], false);
                     overlay.classList.remove('active');
                 }
             });
