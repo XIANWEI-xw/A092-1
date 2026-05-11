@@ -1032,38 +1032,43 @@
         if (!area) return;
         var msgs = conversations[currentChatId] || [];
         var rows = Array.from(area.querySelectorAll('.msg-row:not(#cdTypingRow)'));
-        if (rows.length <= 18) return;
+        if (rows.length <= 20) return;
 
-        var excess = rows.length - 18;
+        /* 把最早的那一行移除，保持DOM行数不超过20 */
+        var excess = rows.length - 20;
         for (var i = 0; i < excess; i++) {
-            if (rows[i] && rows[i].parentNode) rows[i].parentNode.removeChild(rows[i]);
+            if (rows[i] && rows[i].parentNode) {
+                rows[i].parentNode.removeChild(rows[i]);
+            }
         }
 
+        /* 确保顶部有 sentinel 提示可以加载更多 */
         if (!document.getElementById('cdLoadSentinel')) {
-            var totalMsgs = msgs.length;
-            var visibleCount = rows.length;
-            
-            if (totalMsgs > visibleCount) {
-                var sentinel = document.createElement('div');
-                sentinel.className = 'cd-load-hint';
-                sentinel.id = 'cdLoadSentinel';
-                sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;position:relative;z-index:99;padding:20px 0;width:100%;clear:both;display:block;';
-                sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text">↑ LOAD MORE · ' + (totalMsgs - visibleCount) + ' REMAINING</div><div class="lh-line"></div>';
-                
-                var triggerLoad = function(e) {
-                    e.preventDefault(); e.stopPropagation();
-                    cdDisplayLimit += 18;
-                    renderMessages(currentChatId, true);
-                };
-                sentinel.onclick = triggerLoad;
-                sentinel.ontouchend = triggerLoad;
+            var sentinel = document.createElement('div');
+            sentinel.className = 'cd-load-hint';
+            sentinel.id = 'cdLoadSentinel';
+            sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
+            var remaining = msgs.length - 20;
+            sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · ' + remaining + ' REMAINING</div><div class="lh-line"></div>';
 
-                var sysMsg = area.querySelector('.sys-msg');
-                if (sysMsg && sysMsg.nextSibling) {
-                    area.insertBefore(sentinel, sysMsg.nextSibling);
-                } else {
-                    area.insertBefore(sentinel, area.firstChild);
-                }
+            sentinel.onclick = function(e) {
+                e.stopPropagation();
+                cdDisplayLimit += 18;
+                renderMessages(currentChatId, true);
+            };
+            sentinel.ontouchend = function(e) {
+                e.stopPropagation();
+                cdDisplayLimit += 18;
+                renderMessages(currentChatId, true);
+            };
+
+            var sysMsg = area.querySelector('.sys-msg');
+            if (sysMsg && sysMsg.nextSibling) {
+                area.insertBefore(sentinel, sysMsg.nextSibling);
+            } else if (sysMsg) {
+                area.insertBefore(sentinel, sysMsg.nextSibling || area.firstChild);
+            } else {
+                area.insertBefore(sentinel, area.firstChild);
             }
         }
     }
