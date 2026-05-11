@@ -1040,12 +1040,32 @@
         }
 
         if (!document.getElementById('cdLoadSentinel')) {
-            var startIdx = msgs.length - rows.length;
-            var sentinel = document.createElement('div');
-            sentinel.className = 'cd-load-hint';
-            sentinel.id = 'cdLoadSentinel';
-            sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;width:100%;';
-            sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(msgs.length / 18) + '</div><div class="lh-line"></div>';
+            var totalMsgs = msgs.length;
+            var visibleCount = rows.length;
+            
+            if (totalMsgs > visibleCount) {
+                var sentinel = document.createElement('div');
+                sentinel.className = 'cd-load-hint';
+                sentinel.id = 'cdLoadSentinel';
+                sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;position:relative;z-index:99;padding:20px 0;width:100%;clear:both;display:block;';
+                sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text">↑ LOAD MORE · ' + (totalMsgs - visibleCount) + ' REMAINING</div><div class="lh-line"></div>';
+                
+                var triggerLoad = function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    cdDisplayLimit += 18;
+                    renderMessages(currentChatId, true);
+                };
+                sentinel.onclick = triggerLoad;
+                sentinel.ontouchend = triggerLoad;
+
+                var sysMsg = area.querySelector('.sys-msg');
+                if (sysMsg && sysMsg.nextSibling) {
+                    area.insertBefore(sentinel, sysMsg.nextSibling);
+                } else {
+                    area.insertBefore(sentinel, area.firstChild);
+                }
+            }
+        }
             
             var triggerLoad = function(e) {
                 e.stopPropagation();
@@ -3476,12 +3496,19 @@
             var area = document.getElementById('cdChatArea');
             if (!area) return;
 
+            /* 强化判定：无论点到 bubble 内部的任何元素，都向上追溯到 row */
             var row = e.target.closest('.msg-row');
             if (!row || row.id === 'cdTypingRow') return;
             
-            /* 即使点到头像或空白处，也强制锁定到该行的气泡 */
+            /* 锁定气泡元素 */
             var bubble = row.querySelector('.bubble');
             if (!bubble) return;
+
+            /* 阻止浏览器默认的长按弹出菜单（如复制图片） */
+            if (e.type === 'touchstart') {
+                /* 如果点的是 AI 气泡，确保不会因为头像层级被拦截 */
+                row.style.zIndex = "100"; 
+            }
 
             /* 清除上一次残留状态 */
             area.querySelectorAll('.msg-row.highlighted').forEach(function(r) { r.classList.remove('highlighted'); });
@@ -4017,19 +4044,33 @@
         if (msDeleteBtn) {
             msDeleteBtn.addEventListener('click', function() {
                 if (!currentChatId || selectedMsgs.size === 0) return;
-                if (confirm('Delete ' + selectedMsgs.size + ' message(s)?')) {
+                var count = selectedMsgs.size;
+                if (confirm('Confirm deletion of ' + count + ' message(s)?')) {
                     var oldMsgs = conversations[currentChatId] || [];
+                    
+                    /* 1. 建立一个纯数字的待删索引集合 */
+                    var toDelete = new Set();
+                    selectedMsgs.forEach(function(val) {
+                        var n = parseInt(val, 10);
+                        if (!isNaN(n)) toDelete.add(n);
+                    });
+
+                    /* 2. 执行过滤 */
                     var newMsgs = oldMsgs.filter(function(_, idx) {
-                        return !selectedMsgs.has(idx);
+                        return !toDelete.has(idx);
                     });
                     
+                    /* 3. 更新内存并保存 */
                     conversations[currentChatId] = newMsgs;
                     saveOneConversation(currentChatId);
                     
+                    /* 4. 重置状态 */
                     isMultiMode = false;
                     selectedMsgs.clear();
                     document.getElementById('caChatDetail').classList.remove('multi-mode');
                     
+                    /* 5. 立即重置分页限制并刷新，确保索引重新计算 */
+                    cdDisplayLimit = 18; 
                     renderMessages(currentChatId);
                     renderChats();
                 }
