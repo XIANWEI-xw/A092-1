@@ -710,8 +710,8 @@
         '#caChatDetail.av-pos-top .msg-content-wrap { align-items: flex-start; }' +
         '#caChatDetail.av-pos-top .row-received .msg-avatar { transform: translateY(0); margin-top: 4px; margin-bottom: 0; }' +
         /* 遮罩 — 轻量化：仅轻微淡化背景 */
-        '#caChatDetail .lp-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.25); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); z-index: 30; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }' +
-        '#caChatDetail .lp-overlay.active { opacity: 1; pointer-events: auto; }' +
+        '#caChatDetail .lp-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.25); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); z-index: 30; opacity: 0; pointer-events: none !important; transition: opacity 0.3s ease; }' +
+        '#caChatDetail .lp-overlay.active { opacity: 1; pointer-events: none !important; }' +
         /* 遮罩激活时，让非高亮的气泡变淡 */
         '#caChatDetail .lp-overlay.active ~ .msg-row:not(.highlighted) { opacity: 0.4; filter: grayscale(0.3); transition: opacity 0.3s ease; }' +
         /* 确保高亮的消息行浮在最上层 */
@@ -744,30 +744,26 @@
         '.lh-text { font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: 2px; color: #151515; font-weight: 700; text-transform: uppercase; }' +
         /* ── 方案 06: GHOST OUTLINE 纯净版 ── */
         /* 彻底去掉对勾并重置位移 */
-        /* ── 方案 06: GHOST OUTLINE 彻底零位移版 ── */
-        /* 1. 彻底禁用所有位移属性 */
-        '#caChatDetail.multi-mode .msg-row {' +
-            'padding-left: 12px !important;' +
-            'padding-right: 12px !important;' +
-            'transform: none !important;' +
-            'margin-left: 0 !important;' +
-        '}' +
-        '#caChatDetail.multi-mode .msg-content-wrap {' +
-            'transform: none !important;' +
-            'margin-left: 0 !important;' +
+        /* 确保 AI 气泡在长按时能被正确选中 */
+        '#caChatDetail .row-received { position: relative; z-index: 1; }' +
+        '#caChatDetail .row-received .bubble { pointer-events: auto !important; }' +
+        
+        /* 关键：防止翻译层拦截长按事件 */
+        '#caChatDetail .expand-wrapper { pointer-events: none !important; }' +
+        '#caChatDetail .expand-inner { pointer-events: none !important; }' +
+        '#caChatDetail .trans-content, #caChatDetail .trans-block { pointer-events: none !important; }' +
+
+        /* 零位移补丁：针对 AI 气泡的特殊布局重置 */
+        '#caChatDetail.multi-mode .row-received .msg-content-wrap {' +
             'padding-left: 0 !important;' +
+            'margin-left: 0 !important;' +
+            'transform: none !important;' +
         '}' +
-        '#caChatDetail.multi-mode .msg-checkbox {' +
-            'display: none !important;' +
-            'width: 0 !important;' +
-            'height: 0 !important;' +
-            'margin: 0 !important;' +
-            'opacity: 0 !important;' +
-            'pointer-events: none !important;' +
+        '#caChatDetail.multi-mode .row-received .msg-avatar {' +
+            'margin-right: 8px !important;' +
+            'transform: none !important;' +
         '}' +
-
-        /* 2. 选中后的虚线效果 */
-        '#caChatDetail .msg-row.selected .bubble {' +
+        '#caChatDetail.multi-mode .msg-row.selected .bubble {' +
             'background: transparent !important;' +
             'border: 1.5px dashed #151515 !important;' +
             'color: #151515 !important;' +
@@ -775,53 +771,7 @@
             'transform: scale(0.98);' +
             'transition: all 0.2s ease;' +
         '}' +
-        '#caChatDetail .msg-row.selected .msg-text { color: #151515 !important; }' +
-
-        /* 3. 底部按钮样式 */
-        '#caChatDetail .multi-bar {' +
-            'background: none !important;' +
-            'border: none !important;' +
-            'display: flex;' +
-            'align-items: center;' +
-            'justify-content: center;' +
-            'gap: 60px;' +
-            'height: 100px;' +
-            'pointer-events: none;' +
-            'z-index: 200;' +
-        '}' +
-        '#caChatDetail .ms-cancel {' +
-            'font-size: 11px;' +
-            'font-weight: 800;' +
-            'letter-spacing: 2px;' +
-            'text-transform: uppercase;' +
-            'color: #151515;' +
-            'border-bottom: 2px solid #151515;' +
-            'padding-bottom: 2px;' +
-            'cursor: pointer;' +
-            'pointer-events: auto;' +
-        '}' +
-        '#caChatDetail .ms-delete {' +
-            'width: 52px;' +
-            'height: 52px;' +
-            'border-radius: 50%;' +
-            'background: #151515;' +
-            'display: flex;' +
-            'align-items: center;' +
-            'justify-content: center;' +
-            'box-shadow: 0 10px 30px rgba(0,0,0,0.2);' +
-            'cursor: pointer;' +
-            'pointer-events: auto;' +
-            'transition: all 0.2s;' +
-        '}' +
-        '#caChatDetail .msg-row.selected .bubble {' +
-            'background: transparent !important;' +
-            'border: 1.5px dashed #151515 !important;' +
-            'color: #151515 !important;' +
-            'box-shadow: none !important;' +
-            'transform: scale(0.98);' +
-            'transition: all 0.2s ease;' +
-        '}' +
-        '#caChatDetail .msg-row.selected .msg-text { color: #151515 !important; }' +
+        '#caChatDetail.multi-mode .msg-row.selected .msg-text { color: #151515 !important; }' +
         '#caChatDetail .multi-bar {' +
             'background: none !important;' + /* 去掉背景胶囊 */
             'border: none !important;' +
@@ -870,6 +820,7 @@
         '}' +
         '#caChatDetail .ms-delete:active { transform: scale(0.9); }' +
         '#caChatDetail .ms-cancel:active { opacity: 0.5; }' +
+        '#caChatDetail .msg-checkbox { display: none !important; }' +
     '</style>';
 }
 

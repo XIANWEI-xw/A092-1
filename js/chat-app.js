@@ -1066,25 +1066,6 @@
                 }
             }
         }
-            
-            var triggerLoad = function(e) {
-                e.stopPropagation();
-                var total = (conversations[currentChatId] || []).length;
-                if (cdDisplayLimit < total) {
-                    cdDisplayLimit += 18;
-                    renderMessages(currentChatId, true);
-                }
-            };
-            sentinel.onclick = triggerLoad;
-            sentinel.ontouchend = triggerLoad;
-
-            var sysMsg = area.querySelector('.sys-msg');
-            if (sysMsg && sysMsg.nextSibling) {
-                area.insertBefore(sentinel, sysMsg.nextSibling);
-            } else {
-                area.insertBefore(sentinel, area.firstChild);
-            }
-        }
     }
 
     function renderMessages(entId, isLoadMore) {
@@ -1158,11 +1139,19 @@
             var rawText = isSent ? stripSysTime(m.text) : m.text;
             if (!isSent && rawText.indexOf('\n') !== -1) {
                 var segments = rawText.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
-                segments.forEach(function(seg) { var r = cdAddMsg(fragment, seg, type, timeStr, '', false); r.dataset.msgIndex = realIdx; });
+                segments.forEach(function(seg, segIdx) {
+                    var r = cdAddMsg(fragment, seg, type, timeStr, '', false);
+                    /* 主索引存真实消息索引，用 data-seg-index 区分是第几段 */
+                    r.dataset.msgIndex = String(realIdx);
+                    r.dataset.segIndex = String(segIdx);
+                    r.dataset.segTotal = String(segments.length);
+                });
             } else {
                 var r = cdAddMsg(fragment, rawText, type, timeStr, isSent ? 'READ' : '', false);
                 if (isSent) { var metaEl = r.querySelector('.msg-meta'); if (metaEl) metaEl.innerHTML = makeMetaHtml('sent', 'READ', timeStr); }
-                r.dataset.msgIndex = realIdx;
+                r.dataset.msgIndex = String(realIdx);
+                r.dataset.segIndex = '0';
+                r.dataset.segTotal = '1';
             }
         });
 
@@ -1177,6 +1166,8 @@
         if (!isLoadMore) area.scrollTop = area.scrollHeight;
         area.style.opacity = '1';
         area.style.scrollBehavior = '';
+        /* 每次渲染完消息后重新绑定气泡触摸事件 */
+        if (typeof bindAllBubbles === 'function') bindAllBubbles();
         var sentinel = document.getElementById('cdLoadSentinel');
         if (sentinel) {
             sentinel.ontouchend = function(e) {
@@ -3409,6 +3400,7 @@
         var selectedMsgs = new Set();
         var touchStartX = 0;
         var touchStartY = 0;
+        var updateMsDelCount = function() {};
 
         function closeContextMenu() {
             clearTimeout(cmTimer);
@@ -3461,12 +3453,12 @@
 
         function updateMultiBar() {
             var delBtn = document.getElementById('cdMsDelete');
-            if (delBtn) {
-                /* 图标版不显示数字，通过缩放和透明度表示状态 */
-                delBtn.style.opacity = selectedMsgs.size > 0 ? '1' : '0.2';
-                delBtn.style.pointerEvents = selectedMsgs.size > 0 ? 'auto' : 'none';
-                delBtn.style.transform = selectedMsgs.size > 0 ? 'scale(1)' : 'scale(0.85)';
-            }
+            if (!delBtn) return;
+            var area = document.getElementById('cdChatArea');
+            var count = area ? area.querySelectorAll('.msg-row.selected').length : 0;
+            delBtn.style.opacity = count > 0 ? '1' : '0.2';
+            delBtn.style.pointerEvents = count > 0 ? 'auto' : 'none';
+            delBtn.style.transform = count > 0 ? 'scale(1)' : 'scale(0.85)';
         }
 
         var detailEl = document.getElementById('caChatDetail');
@@ -3477,93 +3469,90 @@
             e.stopPropagation();
             var row = e.target.closest('.msg-row');
             if (!row || row.id === 'cdTypingRow') return;
-            
-            var idx = parseInt(row.dataset.msgIndex, 10);
-            if (isNaN(idx)) return;
 
-            if (selectedMsgs.has(idx)) {
-                selectedMsgs.delete(idx);
+            /* 每行独立选中/取消，不联动同msgIndex的其他段落 */
+            if (row.classList.contains('selected')) {
                 row.classList.remove('selected');
             } else {
-                selectedMsgs.add(idx);
                 row.classList.add('selected');
             }
+
             updateMultiBar();
+            if (typeof updateMsDelCount === 'function') updateMsDelCount();
         });
 
         function handlePressStart(e) {
             if (isMultiMode) return;
-            var area = document.getElementById('cdChatArea');
-            if (!area) return;
 
-            /* 强化判定：无论点到 bubble 内部的任何元素，都向上追溯到 row */
-            var row = e.target.closest('.msg-row');
+            var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            /* 找 msg-row：先从 target 向上找，找不到用坐标穿透 */
+            var row = null;
+            var target = e.target;
+            if (target && target.closest) {
+                row = target.closest('.msg-row');
+            }
+            if (!row) {
+                /* 把所有装饰层临时设为 none 再打点 */
+                var covers = ['#cdLpOverlay','#cdChatMask','.lp-star-badge','.lp-bubble-meta','.lp-wd-dust'];
+                var coverEls = [];
+                covers.forEach(function(sel) {
+                    document.querySelectorAll(sel).forEach(function(el) { coverEls.push(el); });
+                });
+                var savedPE = coverEls.map(function(el) { return el.style.pointerEvents; });
+                coverEls.forEach(function(el) { el.style.pointerEvents = 'none'; });
+                var hit = document.elementFromPoint(clientX, clientY);
+                coverEls.forEach(function(el, i) { el.style.pointerEvents = savedPE[i]; });
+                if (hit && hit.closest) row = hit.closest('.msg-row');
+            }
+
             if (!row || row.id === 'cdTypingRow') return;
-            
-            /* 锁定气泡元素 */
+
+            var chatArea = document.getElementById('cdChatArea');
+            if (!chatArea || !chatArea.contains(row)) return;
+
             var bubble = row.querySelector('.bubble');
             if (!bubble) return;
 
-            /* 阻止浏览器默认的长按弹出菜单（如复制图片） */
-            if (e.type === 'touchstart') {
-                /* 如果点的是 AI 气泡，确保不会因为头像层级被拦截 */
-                row.style.zIndex = "100"; 
-            }
+            touchStartX = clientX;
+            touchStartY = clientY;
 
-            /* 清除上一次残留状态 */
-            area.querySelectorAll('.msg-row.highlighted').forEach(function(r) { r.classList.remove('highlighted'); });
-            area.querySelectorAll('.bubble.lp-lifted').forEach(function(b) {
-                b.classList.remove('lp-lifted');
-                b.style.animation = 'none';
-                b.style.boxShadow = '';
-                b.style.transform = '';
-                void b.offsetWidth;
-                b.style.animation = '';
-            });
-            var overlay = document.getElementById('cdLpOverlay');
-            if (overlay) overlay.classList.remove('active');
-
-            if (e.type === 'touchstart' && e.touches && e.touches.length > 0) {
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-            }
-
-            /* 不在按下时立即加任何 class，避免点击触发动画 */
             clearTimeout(cmTimer);
             cmTimer = setTimeout(function() {
-                /* 1. 先激活遮罩，触发周围气泡变淡 */
-                if (overlay) overlay.classList.add('active');
+                if (chatArea) {
+                    chatArea.querySelectorAll('.msg-row.highlighted').forEach(function(r) {
+                        r.classList.remove('highlighted');
+                    });
+                    chatArea.querySelectorAll('.bubble.lp-lifted').forEach(function(b) {
+                        b.classList.remove('lp-lifted');
+                        b.style.animation = 'none';
+                        void b.offsetWidth;
+                        b.style.animation = '';
+                    });
+                }
 
-                /* 2. 锁定高亮行，使其保持不透明并置顶 */
                 cmActiveRow = row;
                 row.classList.add('highlighted');
 
-                /* 3. Weight Drop 动画处理 */
-                var allAnimEls = bubble.querySelectorAll('*');
-                allAnimEls.forEach(function(el) {
-                    el.style.animation = 'none';
-                    void el.offsetWidth;
-                    el.style.animation = '';
-                });
+                var overlay = document.getElementById('cdLpOverlay');
+                if (overlay) overlay.classList.add('active');
+
                 bubble.style.animation = 'none';
                 bubble.style.boxShadow = '';
                 bubble.style.transform = '';
                 void bubble.offsetWidth;
                 bubble.style.animation = '';
-
                 bubble.classList.add('lp-lifted');
 
-                /* 4. 震动反馈 */
                 if (navigator.vibrate) navigator.vibrate(8);
 
                 var cm = document.getElementById('cdContextMenu');
-                var mask = document.getElementById('cdChatMask');
                 if (!cm) return;
-                if (mask) mask.classList.add('active');
 
-                var bubbleRectF = bubble.getBoundingClientRect();
-                var fixedTop = bubbleRectF.top - 58;
-                if (fixedTop < 70) fixedTop = bubbleRectF.bottom + 10;
+                var bubbleRect = bubble.getBoundingClientRect();
+                var fixedTop = bubbleRect.top - 58;
+                if (fixedTop < 70) fixedTop = bubbleRect.bottom + 10;
 
                 cm.style.position = 'fixed';
                 cm.style.top = fixedTop + 'px';
@@ -3573,10 +3562,9 @@
                     cm.style.right = '20px';
                     cm.style.left = 'auto';
                 } else {
-                    var bubbleCenterFX = bubbleRectF.left + bubbleRectF.width / 2;
-                    var cmHalfW = 130;
-                    var vw = window.innerWidth;
-                    var leftPos = Math.max(8, Math.min(bubbleCenterFX - cmHalfW, vw - cmHalfW * 2 - 8));
+                    var bubbleCenterX = bubbleRect.left + bubbleRect.width / 2;
+                    var cmWidth = 220;
+                    var leftPos = Math.max(8, Math.min(bubbleCenterX - cmWidth / 2, window.innerWidth - cmWidth - 8));
                     cm.style.left = leftPos + 'px';
                     cm.style.right = 'auto';
                 }
@@ -3589,6 +3577,7 @@
                 cmActiveBtn = null;
             }, 420);
         }
+
 
         function handlePressMove(e) {
             if (e.type === 'touchmove' && e.touches && e.touches.length > 0) {
@@ -3630,15 +3619,36 @@
             }
         }
 
-        detailEl.addEventListener('touchstart', handlePressStart, {passive: true});
-        detailEl.addEventListener('touchmove', handlePressMove, {passive: true});
-        detailEl.addEventListener('touchend', handlePressEnd, {passive: true});
-        detailEl.addEventListener('touchcancel', handlePressCancel, {passive: true});
+        /* lp-overlay 永远不拦截指针事件，只做视觉遮罩 */
+        var lpOverlayEl = document.getElementById('cdLpOverlay');
+        if (lpOverlayEl) {
+            lpOverlayEl.style.pointerEvents = 'none';
+        }
 
-        detailEl.addEventListener('mousedown', handlePressStart);
-        detailEl.addEventListener('mousemove', handlePressMove);
-        detailEl.addEventListener('mouseup', handlePressEnd);
+        /* chat-mask 同样不拦截 */
+        var chatMaskEl = document.getElementById('cdChatMask');
+        if (chatMaskEl) {
+            chatMaskEl.style.pointerEvents = 'none';
+        }
+
+        /* 用 capture 阶段在 cdChatArea 上捕获，确保气泡内任何子元素点击都能触发 */
+        var chatAreaEl = document.getElementById('cdChatArea');
+        if (chatAreaEl) {
+            chatAreaEl.addEventListener('touchstart', handlePressStart, {passive: true, capture: false});
+            chatAreaEl.addEventListener('touchmove', handlePressMove, {passive: true, capture: false});
+            chatAreaEl.addEventListener('touchend', handlePressEnd, {passive: true, capture: false});
+            chatAreaEl.addEventListener('touchcancel', handlePressCancel, {passive: true, capture: false});
+            chatAreaEl.addEventListener('mousedown', handlePressStart);
+            chatAreaEl.addEventListener('mousemove', handlePressMove);
+            chatAreaEl.addEventListener('mouseup', handlePressEnd);
+        }
+
+        /* detailEl 只保留 mouseleave 兜底 */
         detailEl.addEventListener('mouseleave', handlePressEnd);
+
+        /* bindAllBubbles 保留为空函数，兼容 renderMessages 里的调用 */
+        function bindBubbleTouchStart() {}
+        function bindAllBubbles() {}
 
         document.addEventListener('click', function(e) {
             if (!isMultiMode
@@ -3679,60 +3689,9 @@
                 if (newText !== null && newText.trim() !== '') {
                     newText = newText.trim();
                     msgs[index].text = newText;
-                    if (msgs[index].role === 'user') {
-                        conversations[chatId] = msgs.slice(0, index + 1);
-                        saveOneConversation(chatId);
-                        closeContextMenu();
-                        renderMessages(chatId);
-                        setTimeout(function () {
-                            var area = document.getElementById('cdChatArea');
-                            var typingRow = cdAddTyping(area, chatId);
-                            callAI(chatId, newText, function (reply) {
-                                var rawSegs = reply.split('||||');
-                                var segments = [];
-                                rawSegs.forEach(function(rs) {
-                                    var _prot = rs.replace(/\|\|\|TRANS\|\|\|/g, '\u0001TRANS\u0001');
-                                    var subs = _prot.split(/\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
-                                    subs.forEach(function(s) { segments.push(s.replace(/\u0001TRANS\u0001/g, '|||TRANS|||')); });
-                                });
-                                var fullReply = segments.join('\n');
-                                var aiMsg = { role: 'assistant', text: fullReply, time: dateNow() + ' ' + timeNow() };
-                                conversations[chatId].push(aiMsg);
-                                saveOneConversation(chatId);
-                                function resolveSeg(row, seg) {
-                                    var mt = seg, tt = '';
-                                    if (seg.indexOf('|||TRANS|||') !== -1) {
-                                        var parts = seg.split('|||TRANS|||');
-                                        mt = parts[0].trim();
-                                        tt = parts[1] ? parts[1].trim() : '';
-                                    }
-                                    cdResolve(row, mt + (tt ? '|||TRANS|||' + tt : ''), cdGetNowTime());
-                                }
-                                if (segments.length <= 1) {
-                                    resolveSeg(typingRow, segments[0] || '');
-                                } else {
-                                    resolveSeg(typingRow, segments[0]);
-                                    var i = 1;
-                                    function showNextEdit() {
-                                        if (i >= segments.length) return;
-                                        setTimeout(function () {
-                                            var area2 = document.getElementById('cdChatArea');
-                                            var nt = cdAddTyping(area2, chatId);
-                                            setTimeout(function () {
-                                                resolveSeg(nt, segments[i]);
-                                                i++; showNextEdit();
-                                            }, 400 + Math.random() * 800);
-                                        }, 300 + Math.random() * 700);
-                                    }
-                                    showNextEdit();
-                                }
-                            });
-                        }, 500);
-                    } else {
-                        saveOneConversation(chatId);
-                        closeContextMenu();
-                        renderMessages(chatId);
-                    }
+                    saveOneConversation(chatId);
+                    closeContextMenu();
+                    renderMessages(chatId);
                 } else {
                     closeContextMenu();
                 }
@@ -3995,14 +3954,10 @@
                     });
                 }
 
-                /* 确保长按的那条消息被选中 */
-                var initialIdx = parseInt(index, 10);
-                if (!isNaN(initialIdx)) {
-                    selectedMsgs.add(initialIdx);
-                    if (savedRow) savedRow.classList.add('selected');
-                }
+                /* 不预选任何行，让用户自己点击选择 */
                 
                 updateMultiBar();
+                if (typeof updateMsDelCount === 'function') updateMsDelCount();
                 closeContextMenu();
             }
         }
@@ -4031,7 +3986,7 @@
 
         var msCancelBtn = document.getElementById('cdMsCancel');
         var msDeleteBtn = document.getElementById('cdMsDelete');
-        
+
         if (msCancelBtn) {
             msCancelBtn.addEventListener('click', function() {
                 isMultiMode = false;
@@ -4042,39 +3997,249 @@
         }
         
         if (msDeleteBtn) {
-            msDeleteBtn.addEventListener('click', function() {
-                if (!currentChatId || selectedMsgs.size === 0) return;
-                var count = selectedMsgs.size;
-                if (confirm('Confirm deletion of ' + count + ' message(s)?')) {
+            var msDeleteHolding = false;
+            var msDeleteTimer = null;
+            var msDeleteProgress = 0;
+            var msDeleteRaf = null;
+
+            /* 注入长按删除样式 */
+            if (!document.getElementById('ms-del-style')) {
+                var msDelStyle = document.createElement('style');
+                msDelStyle.id = 'ms-del-style';
+                msDelStyle.textContent =
+                    '#cdMsDelete { position: relative; overflow: visible !important; }' +
+                    '.ms-del-ring { position: absolute; inset: -4px; border-radius: 50%; pointer-events: none; }' +
+                    '.ms-del-ring svg { width: 100%; height: 100%; }' +
+                    '.ms-del-count { position: absolute; top: -10px; right: -10px; min-width: 20px; height: 20px; border-radius: 10px; background: #A63426; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; padding: 0 4px; pointer-events: none; transform: scale(0); transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); box-shadow: 0 2px 8px rgba(166,52,38,0.4); }' +
+                    '.ms-del-count.show { transform: scale(1); }' +
+                    '.ms-del-hint { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 8px; font-weight: 800; letter-spacing: 1.5px; color: rgba(21,21,21,0.4); pointer-events: none; opacity: 0; transition: opacity 0.2s; text-transform: uppercase; }' +
+                    '.ms-del-hint.show { opacity: 1; }' +
+                    '@keyframes ms-del-shake { 0%,100%{transform:rotate(0deg)} 20%{transform:rotate(-8deg)} 40%{transform:rotate(8deg)} 60%{transform:rotate(-6deg)} 80%{transform:rotate(6deg)} }' +
+                    '@keyframes ms-del-pop { 0%{transform:scale(1)} 40%{transform:scale(1.25)} 70%{transform:scale(0.9)} 100%{transform:scale(1)} }' +
+                    '@keyframes ms-del-fly { 0%{opacity:1;transform:translate(0,0) scale(1)} 100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0)} }';
+                document.head.appendChild(msDelStyle);
+            }
+
+            /* 构建角标和进度环 */
+            var msDelRing = document.createElement('div');
+            msDelRing.className = 'ms-del-ring';
+            var RING_R = 30;
+            var RING_CIRC = 2 * Math.PI * RING_R;
+            msDelRing.innerHTML = '<svg viewBox="0 0 68 68"><circle cx="34" cy="34" r="' + RING_R + '" fill="none" stroke="rgba(21,21,21,0.08)" stroke-width="2.5"/><circle id="msDelArc" cx="34" cy="34" r="' + RING_R + '" fill="none" stroke="#A63426" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="' + RING_CIRC + '" stroke-dashoffset="' + RING_CIRC + '" transform="rotate(-90 34 34)" style="transition:stroke-dashoffset 0.05s linear;"/></svg>';
+            msDeleteBtn.appendChild(msDelRing);
+
+            var msDelCount = document.createElement('div');
+            msDelCount.className = 'ms-del-count';
+            msDeleteBtn.appendChild(msDelCount);
+
+            var msDelHint = document.createElement('div');
+            msDelHint.className = 'ms-del-hint';
+            msDelHint.textContent = 'HOLD TO DELETE';
+            msDeleteBtn.appendChild(msDelHint);
+
+            /* 收集选中行对应的唯一 msgIndex 集合 */
+            /* data-msg-index 是 dataset.msgIndex，注意 dataset 会把驼峰转连字符 */
+            /* 收集选中行的精确信息：{ msgIndex, segIndex, segTotal } */
+            function getMsDeleteItems() {
+                var area = document.getElementById('cdChatArea');
+                if (!area) return [];
+                var items = [];
+                area.querySelectorAll('.msg-row.selected').forEach(function(r) {
+                    var msgIdx = parseInt(r.getAttribute('data-msg-index'), 10);
+                    var segIdx = parseInt(r.getAttribute('data-seg-index') || '0', 10);
+                    var segTotal = parseInt(r.getAttribute('data-seg-total') || '1', 10);
+                    if (!isNaN(msgIdx)) {
+                        items.push({ msgIndex: msgIdx, segIndex: segIdx, segTotal: segTotal });
+                    }
+                });
+                return items;
+            }
+
+            /* 角标显示：按选中的DOM行数计 */
+            updateMsDelCount = function() {
+                var area = document.getElementById('cdChatArea');
+                var n = area ? area.querySelectorAll('.msg-row.selected').length : 0;
+                msDelCount.textContent = n;
+                if (n > 0) {
+                    msDelCount.classList.add('show');
+                    msDelHint.classList.add('show');
+                } else {
+                    msDelCount.classList.remove('show');
+                    msDelHint.classList.remove('show');
+                }
+                return n;
+            };
+
+            function msDelReset() {
+                msDeleteHolding = false;
+                clearTimeout(msDeleteTimer);
+                cancelAnimationFrame(msDeleteRaf);
+                msDeleteProgress = 0;
+                var arc = document.getElementById('msDelArc');
+                if (arc) {
+                    arc.style.transition = 'stroke-dashoffset 0.3s cubic-bezier(0.16,1,0.3,1)';
+                    arc.style.strokeDashoffset = RING_CIRC;
+                    setTimeout(function() { if (arc) arc.style.transition = ''; }, 350);
+                }
+                msDeleteBtn.style.transform = '';
+                msDeleteBtn.style.animation = '';
+            }
+
+            function msDelExecute() {
+                if (!currentChatId) return;
+                var deleteItems = getMsDeleteItems();
+                if (deleteItems.length === 0) return;
+
+                /* 飞散粒子 */
+                var btnRect = msDeleteBtn.getBoundingClientRect();
+                var cx = btnRect.left + btnRect.width / 2;
+                var cy = btnRect.top + btnRect.height / 2;
+                for (var pi = 0; pi < 10; pi++) {
+                    var angle = (pi / 10) * Math.PI * 2 + Math.random() * 0.4;
+                    var dist = 30 + Math.random() * 25;
+                    var size = 3 + Math.random() * 4;
+                    var pEl = document.createElement('div');
+                    pEl.style.cssText = 'position:fixed;left:' + cx + 'px;top:' + cy + 'px;width:' + size + 'px;height:' + size + 'px;background:#A63426;border-radius:50%;pointer-events:none;z-index:99999;--tx:' + (Math.cos(angle) * dist) + 'px;--ty:' + (Math.sin(angle) * dist) + 'px;animation:ms-del-fly 0.5s ease-out forwards;';
+                    document.body.appendChild(pEl);
+                    setTimeout(function(el) { if (el.parentNode) el.parentNode.removeChild(el); }, 550, pEl);
+                }
+
+                msDeleteBtn.style.animation = 'ms-del-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards';
+
+                var area = document.getElementById('cdChatArea');
+                var selectedRowEls = area ? Array.from(area.querySelectorAll('.msg-row.selected')) : [];
+                selectedRowEls.forEach(function(r) {
+                    var tx = (Math.random() - 0.5) * 80;
+                    var ty = -50 - Math.random() * 40;
+                    var rot = (Math.random() - 0.5) * 30;
+                    r.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                    r.style.transform = 'translate(' + tx + 'px,' + ty + 'px) rotate(' + rot + 'deg) scale(0.7)';
+                    r.style.opacity = '0';
+                });
+
+                setTimeout(function() {
+                    if (!currentChatId) return;
                     var oldMsgs = conversations[currentChatId] || [];
-                    
-                    /* 1. 建立一个纯数字的待删索引集合 */
-                    var toDelete = new Set();
-                    selectedMsgs.forEach(function(val) {
-                        var n = parseInt(val, 10);
-                        if (!isNaN(n)) toDelete.add(n);
+                    var newMsgs = oldMsgs.slice();
+
+                    /* 按 msgIndex 分组，统计每条消息有哪些段被选中 */
+                    var groupMap = {};
+                    deleteItems.forEach(function(item) {
+                        var k = item.msgIndex;
+                        if (!groupMap[k]) groupMap[k] = { selected: [], total: item.segTotal };
+                        groupMap[k].selected.push(item.segIndex);
                     });
 
-                    /* 2. 执行过滤 */
-                    var newMsgs = oldMsgs.filter(function(_, idx) {
-                        return !toDelete.has(idx);
+                    /* 从大到小处理每条消息，避免索引位移 */
+                    var msgIdxs = Object.keys(groupMap).map(Number).sort(function(a, b) { return b - a; });
+                    msgIdxs.forEach(function(msgIdx) {
+                        if (msgIdx < 0 || msgIdx >= newMsgs.length) return;
+                        var info = groupMap[msgIdx];
+                        var msg = newMsgs[msgIdx];
+
+                        /* 判断是否全段都被选中 */
+                        var allSegsSelected = (info.selected.length >= info.total);
+
+                        if (allSegsSelected || info.total === 1) {
+                            /* 整条消息删除 */
+                            newMsgs.splice(msgIdx, 1);
+                        } else {
+                            /* 部分段删除：从消息文本中删掉对应行 */
+                            if (msg && msg.text) {
+                                var lines = msg.text.split('\n').filter(function(s) { return s.trim().length > 0; });
+                                /* 按段索引从大到小删 */
+                                var sortedSegs = info.selected.slice().sort(function(a, b) { return b - a; });
+                                sortedSegs.forEach(function(segIdx) {
+                                    if (segIdx >= 0 && segIdx < lines.length) {
+                                        lines.splice(segIdx, 1);
+                                    }
+                                });
+                                if (lines.length === 0) {
+                                    newMsgs.splice(msgIdx, 1);
+                                } else {
+                                    newMsgs[msgIdx] = Object.assign({}, msg, { text: lines.join('\n') });
+                                }
+                            }
+                        }
                     });
-                    
-                    /* 3. 更新内存并保存 */
+
                     conversations[currentChatId] = newMsgs;
                     saveOneConversation(currentChatId);
-                    
-                    /* 4. 重置状态 */
+
                     isMultiMode = false;
                     selectedMsgs.clear();
-                    document.getElementById('caChatDetail').classList.remove('multi-mode');
-                    
-                    /* 5. 立即重置分页限制并刷新，确保索引重新计算 */
-                    cdDisplayLimit = 18; 
+                    var detEl = document.getElementById('caChatDetail');
+                    if (detEl) detEl.classList.remove('multi-mode');
+                    msDelCount.classList.remove('show');
+                    msDelHint.classList.remove('show');
+
+                    cdDisplayLimit = 18;
                     renderMessages(currentChatId);
                     renderChats();
+                }, 380);
+            }
+
+            var msDelStartTime = null;
+            var HOLD_DURATION = 800;
+
+            function msDelTick(ts) {
+                if (!msDeleteHolding) return;
+                if (!msDelStartTime) msDelStartTime = ts;
+                var elapsed = ts - msDelStartTime;
+                var p = Math.min(elapsed / HOLD_DURATION, 1);
+                msDeleteProgress = p;
+                var arc = document.getElementById('msDelArc');
+                if (arc) arc.style.strokeDashoffset = RING_CIRC * (1 - p);
+                var shakeX = p > 0.3 ? (Math.random() - 0.5) * p * 4 : 0;
+                msDeleteBtn.style.transform = 'scale(' + (1 + p * 0.08) + ') translateX(' + shakeX + 'px)';
+                if (p >= 1) {
+                    msDeleteHolding = false;
+                    msDelReset();
+                    msDelExecute();
+                    return;
                 }
-            });
+                msDeleteRaf = requestAnimationFrame(msDelTick);
+            }
+
+            function msDelStart(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var n = updateMsDelCount();
+                if (n === 0) return;
+                msDeleteHolding = true;
+                msDelStartTime = null;
+                msDeleteBtn.style.animation = 'ms-del-shake 0.4s ease';
+                if (navigator.vibrate) navigator.vibrate(6);
+                msDeleteRaf = requestAnimationFrame(msDelTick);
+            }
+
+            function msDelEnd(e) {
+                if (!msDeleteHolding) return;
+                msDelReset();
+            }
+
+            msDeleteBtn.addEventListener('touchstart', msDelStart, {passive: false});
+            msDeleteBtn.addEventListener('touchend', msDelEnd, {passive: true});
+            msDeleteBtn.addEventListener('touchcancel', msDelEnd, {passive: true});
+            msDeleteBtn.addEventListener('mousedown', msDelStart);
+            msDeleteBtn.addEventListener('mouseup', msDelEnd);
+            msDeleteBtn.addEventListener('mouseleave', msDelEnd);
+
+            /* cancel 按钮也重置角标 */
+            var origMsCancel = document.getElementById('cdMsCancel');
+            if (origMsCancel) {
+                origMsCancel.addEventListener('click', function() {
+                    isMultiMode = false;
+                    selectedMsgs.clear();
+                    var detEl = document.getElementById('caChatDetail');
+                    if (detEl) detEl.classList.remove('multi-mode');
+                    var area2 = document.getElementById('cdChatArea');
+                    if (area2) area2.querySelectorAll('.msg-row.selected').forEach(function(r) { r.classList.remove('selected'); });
+                    msDelCount.classList.remove('show');
+                    msDelHint.classList.remove('show');
+                    msDelReset();
+                });
+            }
         }
 
         /* ── 右向左滑动显现底纹蓝色向右箭头 ── */
