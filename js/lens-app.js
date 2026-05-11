@@ -370,9 +370,9 @@
             '#lensApp .heat-bar-bg{width:100%;height:4px;background:var(--lk-gbss);border-radius:2px;overflow:hidden;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensApp .heat-bar-fill{height:100%;width:0%;border-radius:2px;transition:width .8s cubic-bezier(.16,1,.3,1),background .8s,box-shadow .8s;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:width}' +
 
-            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;will-change:scroll-position;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
+            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;will-change:transform,scroll-position;-webkit-transform:translateZ(0);transform:translateZ(0);contain:strict;}' +
             '#lensApp .chat-scroll::-webkit-scrollbar{display:none}' +
-            '#lensApp .msg-row{animation:lk-fadeIn .3s ease-out forwards;opacity:0;contain:layout style;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;isolation:isolate}' +
+            '#lensApp .msg-row{animation:lk-fadeIn .3s ease-out forwards;opacity:0;contain:layout style paint;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;isolation:isolate}' +
             '@keyframes lk-fadeIn{to{opacity:1}}' +
             '@keyframes lk-msg-dissolve{' +
                 '0%{opacity:1;-webkit-transform:translateZ(0) translateY(0) scale(1);transform:translateZ(0) translateY(0) scale(1);filter:blur(0px)}' +
@@ -961,44 +961,100 @@
 
     var lensDisplayLimit = 15;
 
+    var isLensMessagesLoading = false;
+
+    function buildLensMsgFragment(msgs, startIdx) {
+        var wrap = document.createElement('div');
+        var html = '';
+        for (var i = 0; i < msgs.length; i++) {
+            html += buildMsgHTML(msgs[i], startIdx + i);
+        }
+        wrap.innerHTML = html;
+        var frag = document.createDocumentFragment();
+        while (wrap.firstChild) frag.appendChild(wrap.firstChild);
+        return frag;
+    }
+
+    function bindLensLoadMore(btn) {
+        if (!btn) return;
+        var fn = function() {
+            if (isLensMessagesLoading) return;
+            if (lensDisplayLimit < curMessages.length) {
+                isLensMessagesLoading = true;
+                btn.textContent = '— LOADING —';
+                lensDisplayLimit += 15;
+                renderConvToDOM(curMessages, true);
+            }
+        };
+        btn.onclick = fn;
+        btn.ontouchend = fn;
+    }
+
     function renderConvToDOM(msgs, isLoadMore) {
         var container = document.getElementById('lensChatContainer');
         var typing = document.getElementById('lensTyping');
-
-        var oldHeight = container.scrollHeight;
-
-        while (container.firstChild && container.firstChild !== typing) container.removeChild(container.firstChild);
-        if (!msgs.length) return;
+        if (!container) return;
 
         var startIdx = Math.max(0, msgs.length - lensDisplayLimit);
         var visible = msgs.slice(startIdx);
 
-        var html = '';
-        if (startIdx > 0) {
-            html += '<div class="lens-load-hint" style="text-align:center;padding:20px 0 10px;font-family:\'Syncopate\',sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;" id="lensLoadMore">— LOAD MORE —</div>';
-        }
-        for (var i = 0; i < visible.length; i++) {
-            html += buildMsgHTML(visible[i], startIdx + i);
+        var oldScrollHeight = container.scrollHeight;
+        var oldScrollTop = container.scrollTop;
+
+        container.style.display = 'none';
+
+        while (container.firstChild && container.firstChild !== typing) {
+            container.removeChild(container.firstChild);
         }
 
-        var wrap = document.createElement('div');
-        wrap.innerHTML = html;
+        if (!msgs.length) {
+            container.style.display = '';
+            isLensMessagesLoading = false;
+            return;
+        }
+
         var frag = document.createDocumentFragment();
-        while (wrap.firstChild) frag.appendChild(wrap.firstChild);
+
+        if (startIdx > 0) {
+            var loadBtn = document.createElement('div');
+            loadBtn.id = 'lensLoadMore';
+            loadBtn.style.cssText = 'text-align:center;padding:20px 0 10px;font-family:\'Syncopate\',sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;user-select:none;';
+            loadBtn.textContent = '\u2014 LOAD MORE \u2014';
+            frag.appendChild(loadBtn);
+        }
+
+        var msgFrag = buildLensMsgFragment(visible, startIdx);
+        frag.appendChild(msgFrag);
         container.insertBefore(frag, typing);
 
+        container.style.display = '';
+
         if (isLoadMore) {
-            container.scrollTop = container.scrollHeight - oldHeight;
+            container.scrollTop = container.scrollHeight - oldScrollHeight + oldScrollTop;
         } else {
             scrollBot();
         }
 
-        var loadMoreBtn = document.getElementById('lensLoadMore');
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', function() {
-                lensDisplayLimit += 15;
-                renderConvToDOM(curMessages, true);
-            });
+        setTimeout(function() {
+            isLensMessagesLoading = false;
+        }, 50);
+
+        var btn = document.getElementById('lensLoadMore');
+        if (btn) bindLensLoadMore(btn);
+
+        if (!container.dataset.scrollBoundLoad) {
+            container.addEventListener('scroll', function() {
+                if (container.scrollTop < 80 && !isLensMessagesLoading && curMessages && curMessages.length > 0) {
+                    if (lensDisplayLimit < curMessages.length) {
+                        isLensMessagesLoading = true;
+                        var hint = document.getElementById('lensLoadMore');
+                        if (hint) hint.textContent = '\u2014 LOADING \u2014';
+                        lensDisplayLimit += 15;
+                        renderConvToDOM(curMessages, true);
+                    }
+                }
+            }, { passive: true });
+            container.dataset.scrollBoundLoad = 'true';
         }
     }
 
@@ -1648,20 +1704,8 @@
     }
 
     function reRenderMessages() {
-        var container = document.getElementById('lensChatContainer');
-        var typing = document.getElementById('lensTyping');
-        while (container.firstChild && container.firstChild !== typing) {
-            container.removeChild(container.firstChild);
-        }
-        curMessages.forEach(function(m, idx) {
-            if (m.role === 'user') {
-                if (m.isDirector) addDirectorMsg(m.scene || '', m.dlg || '', idx);
-                else addUserMsg(m.text, idx);
-            } else {
-                addAIMsg(m.text, idx);
-            }
-        });
-        scrollBot();
+        lensDisplayLimit = Math.max(lensDisplayLimit, curMessages.length);
+        renderConvToDOM(curMessages, false);
     }
 
     function fetchInnerVoice(cb) {

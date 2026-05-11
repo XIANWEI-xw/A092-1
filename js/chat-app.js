@@ -69,7 +69,7 @@
             '@keyframes ca-plaque-swing { 0% { transform: translateY(-8px) rotate(-3deg); opacity: 0; } 45% { transform: translateY(1.5px) rotate(1.5deg); opacity: 1; } 65% { transform: translateY(-0.5px) rotate(-0.5deg); } 85% { transform: translateY(0) rotate(0.2deg); } 100% { transform: translateY(0) rotate(0deg); opacity: 1; } }' +
             '.ca-header-hanging { transform-origin: top center; }' +
             '.ca-header-hanging.anim-swing { animation: ca-plaque-swing 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }' +
-            '.chat-area { -webkit-overflow-scrolling: touch; will-change: scroll-position; transform: translateZ(0); }' +
+            '.chat-area { -webkit-overflow-scrolling: touch; will-change: transform, scroll-position; transform: translateZ(0); contain: strict; }' +
             '.msg-row { -webkit-transform: translateZ(0); transform: translateZ(0); will-change: transform, opacity; }' +
             '.bubble { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }' +
             '@media (min-width: 431px) {' +
@@ -966,7 +966,7 @@
             cdLastMsgType = null;
             cdLastMsgRow = null;
             cdExitFloating();
-            renderMessages(entId);
+            renderConvToDOM(conversations[entId] || [], false);
         }
 
         var headerEl = detail.querySelector('.header-system');
@@ -1073,57 +1073,28 @@
         }
     }
 
-    function renderMessages(entId, isLoadMore) {
-        var area = document.getElementById('cdChatArea');
-        var allMsgs = conversations[entId] || [];
-        var ent = entities.find(function (e) { return e.id === entId; });
-        if (!ent) return;
-        
-        var oldHeight = area.scrollHeight;
-        area.style.scrollBehavior = 'auto';
+    var isMessagesLoading = false;
 
-        /* 保留遮罩和覆盖层 */
-        area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
-        cdLastMsgType = null;
-        cdLastMsgRow = null;
+    function stripSysTime(str) {
+        return str.replace(/^\[SYS_TIME:[^\]]*\]\s*/i, '').replace(/^\[CURRENT TIME:[^\]]*\]\s*/i, '');
+    }
 
-        var currentLimit = cdDisplayLimit || 18;
-        var startIdx = Math.max(0, allMsgs.length - currentLimit);
-        var visibleMsgs = allMsgs.slice(startIdx);
+    function formatStoredTime(rawTime) {
+        if (!rawTime) return '';
+        var match = rawTime.match(/^(\d{1,2}):(\d{2})$/);
+        if (match) {
+            var h = parseInt(match[1], 10);
+            var mn = match[2];
+            var ampm = h >= 12 ? 'PM' : 'AM';
+            var h12 = h % 12 || 12;
+            return String(h12).padStart(2,'0') + ':' + mn + ' ' + ampm;
+        }
+        return rawTime;
+    }
+
+    function buildMsgFragment(msgs, startIdx) {
         var fragment = document.createDocumentFragment();
-        
-        if (startIdx > 0) {
-            var loadHint = document.createElement('div');
-            loadHint.className = 'cd-load-hint';
-            loadHint.id = 'cdLoadSentinel';
-            loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
-            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(startIdx/18) + '</div><div class="lh-line"></div>';
-            fragment.appendChild(loadHint);
-        }
-
-        var sysEl = document.createElement('div');
-        sysEl.className = 'sys-msg';
-        sysEl.textContent = 'Conversation with ' + ent.name;
-        fragment.appendChild(sysEl);
-
-        function stripSysTime(str) {
-            return str.replace(/^\[SYS_TIME:[^\]]*\]\s*/i, '').replace(/^\[CURRENT TIME:[^\]]*\]\s*/i, '');
-        }
-
-        function formatStoredTime(rawTime) {
-            if (!rawTime) return '';
-            var match = rawTime.match(/^(\d{1,2}):(\d{2})$/);
-            if (match) {
-                var h = parseInt(match[1], 10);
-                var mn = match[2];
-                var ampm = h >= 12 ? 'PM' : 'AM';
-                var h12 = h % 12 || 12;
-                return String(h12).padStart(2,'0') + ':' + mn + ' ' + ampm;
-            }
-            return rawTime;
-        }
-
-        visibleMsgs.forEach(function (m, vIdx) {
+        msgs.forEach(function(m, vIdx) {
             var realIdx = startIdx + vIdx;
             if (m.role === 'info') {
                 if (m.ai_visible === undefined) m.ai_visible = true;
@@ -1145,53 +1116,112 @@
             if (!isSent && rawText.indexOf('\n') !== -1) {
                 var segments = rawText.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
                 segments.forEach(function(seg, segIdx) {
-                    var r = cdAddMsg(fragment, seg, type, timeStr, '', false);
-                    /* 主索引存真实消息索引，用 data-seg-index 区分是第几段 */
+                    var r = cdAddMsg(fragment, seg, type, timeStr, '', false, true);
                     r.dataset.msgIndex = String(realIdx);
                     r.dataset.segIndex = String(segIdx);
                     r.dataset.segTotal = String(segments.length);
                 });
             } else {
-                var r = cdAddMsg(fragment, rawText, type, timeStr, isSent ? 'READ' : '', false);
+                var r = cdAddMsg(fragment, rawText, type, timeStr, isSent ? 'READ' : '', false, true);
                 if (isSent) { var metaEl = r.querySelector('.msg-meta'); if (metaEl) metaEl.innerHTML = makeMetaHtml('sent', 'READ', timeStr); }
                 r.dataset.msgIndex = String(realIdx);
                 r.dataset.segIndex = '0';
                 r.dataset.segTotal = '1';
             }
         });
+        return fragment;
+    }
+
+    function renderConvToDOM(msgs, isLoadMore) {
+        var area = document.getElementById('cdChatArea');
+        var allMsgs = msgs || [];
+        var currentLimit = cdDisplayLimit || 18;
+        var startIdx = Math.max(0, allMsgs.length - currentLimit);
+        var visibleMsgs = allMsgs.slice(startIdx);
+
+        var oldScrollHeight = area.scrollHeight;
+        var oldScrollTop = area.scrollTop;
+
+        area.style.display = 'none';
+        area.style.scrollBehavior = 'auto';
+
+        area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
+        cdLastMsgType = null;
+        cdLastMsgRow = null;
+
+        var fragment = document.createDocumentFragment();
+
+        if (startIdx > 0) {
+            var loadHint = document.createElement('div');
+            loadHint.className = 'cd-load-hint';
+            loadHint.id = 'cdLoadSentinel';
+            loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
+            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(startIdx / 18) + '</div><div class="lh-line"></div>';
+            fragment.appendChild(loadHint);
+        }
+
+        var sysEl = document.createElement('div');
+        sysEl.className = 'sys-msg';
+        var ent = entities.find(function(e) { return e.id === currentChatId; });
+        sysEl.textContent = 'Conversation with ' + (ent ? ent.name : '');
+        fragment.appendChild(sysEl);
+
+        var msgFrag = buildMsgFragment(visibleMsgs, startIdx);
+        fragment.appendChild(msgFrag);
 
         area.appendChild(fragment);
-        
+
+        area.style.display = 'flex';
+
         if (isLoadMore) {
-            area.scrollTop = area.scrollHeight - oldHeight;
+            area.scrollTop = area.scrollHeight - oldScrollHeight + oldScrollTop;
         } else {
             area.scrollTop = area.scrollHeight;
         }
-        
-        if (!isLoadMore) area.scrollTop = area.scrollHeight;
-        area.style.opacity = '1';
-        area.style.scrollBehavior = '';
-        /* 每次渲染完消息后重新绑定气泡触摸事件 */
+
+        setTimeout(function() {
+            area.style.scrollBehavior = '';
+            isMessagesLoading = false;
+        }, 50);
+
         if (typeof bindAllBubbles === 'function') bindAllBubbles();
+
         var sentinel = document.getElementById('cdLoadSentinel');
-        if (sentinel) {
-            sentinel.ontouchend = function(e) {
-                e.stopPropagation();
-                var msgs = conversations[currentChatId] || [];
-                if (cdDisplayLimit < msgs.length) {
-                    cdDisplayLimit += 18;
-                    renderMessages(currentChatId, true);
+        if (sentinel) bindSentinel(sentinel);
+
+        if (!area.dataset.scrollBoundLoad) {
+            area.addEventListener('scroll', function() {
+                if (area.scrollTop < 80 && !isMessagesLoading && currentChatId) {
+                    var msgs2 = conversations[currentChatId] || [];
+                    if (cdDisplayLimit < msgs2.length) {
+                        isMessagesLoading = true;
+                        var hint = document.getElementById('cdLoadSentinel');
+                        if (hint) {
+                            hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
+                        }
+                        cdDisplayLimit += 18;
+                        renderConvToDOM(conversations[currentChatId], true);
+                    }
                 }
-            };
-            sentinel.onclick = function(e) {
-                e.stopPropagation();
-                var msgs = conversations[currentChatId] || [];
-                if (cdDisplayLimit < msgs.length) {
-                    cdDisplayLimit += 18;
-                    renderMessages(currentChatId, true);
-                }
-            };
+            }, { passive: true });
+            area.dataset.scrollBoundLoad = 'true';
         }
+    }
+
+    function bindSentinel(el) {
+        var fn = function(e) {
+            e.stopPropagation();
+            if (isMessagesLoading) return;
+            var msgs = conversations[currentChatId] || [];
+            if (cdDisplayLimit < msgs.length) {
+                isMessagesLoading = true;
+                el.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
+                cdDisplayLimit += 18;
+                renderMessages(currentChatId, true);
+            }
+        };
+        el.onclick = fn;
+        el.ontouchend = fn;
     }
 
     var transConfig = JSON.parse(localStorage.getItem('ca-trans-config') || '{"style":"off","myLang":"Auto","transLang":"Chinese"}');
@@ -1203,12 +1233,10 @@
         return '<span style="color:' + color + ';font-weight:500;">' + statusText + '</span> \u00b7 ' + timeStr;
     }
 
-    function cdAddMsg(area, text, type, timeStr, statusText, animate) {
+    function cdAddMsg(area, text, type, timeStr, statusText, animate, isBatch) {
         var row = document.createElement('div');
         row.className = 'msg-row ' + (type === 'sent' ? 'row-sent' : 'row-received');
-        /* 注入星星角标和 meta 标签结构，供 lp-lifted 效果使用 */
-        /* 星标和 meta 通过 JS 在 bubble 渲染后追加，见下方 */
-        
+
         if (!animate) {
             row.classList.add('no-anim');
         }
@@ -1220,7 +1248,7 @@
         cdLastMsgRow = row;
 
         var metaHtml = makeMetaHtml(type, statusText, timeStr);
-        
+
         var mainText = text;
         var transText = '';
         if (text.indexOf('|||TRANS|||') !== -1) {
@@ -1250,8 +1278,8 @@
             var ent = entities.find(function(e) { return e.id === currentChatId; });
             if (ent) {
                 var dispName = ent.nickname || ent.name;
-                var avInner = ent.avatar 
-                    ? '<img src="' + ent.avatar + '" style="width:100%;height:100%;object-fit:cover;">' 
+                var avInner = ent.avatar
+                    ? '<img src="' + ent.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
                     : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:' + ent.color + ';color:#fff;font-size:14px;font-weight:700;">' + window.getInitial(dispName) + '</div>';
                 avatarDOM = '<div class="msg-avatar">' + avInner + '</div>';
             }
@@ -1261,7 +1289,7 @@
             try { masks = JSON.parse(localStorage.getItem('ca-user-masks') || '[]'); } catch(e){}
             var activeMask = masks.find(function(m) { return m.active; });
             if (activeMask && activeMask.name) userInitial = getInitial(activeMask.name);
-            
+
             var avInnerMe = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#151515;color:#fff;font-size:14px;font-weight:700;">' + userInitial + '</div>';
             if (activeMask && activeMask.avatar) {
                 avInnerMe = '<img src="' + activeMask.avatar + '" style="width:100%;height:100%;object-fit:cover;">';
@@ -1305,12 +1333,17 @@
         }
 
         area.appendChild(row);
-    if (area.nodeType === 1) {
-        setTimeout(function () { area.scrollTop = area.scrollHeight; }, 10);
-        checkAndPaginateLive();
-    }
-    if (typeof checkAutoSum === 'function') checkAutoSum();
-    return row;
+
+        /* 批量加载时不触发滚动和分页，单条新消息时才触发 */
+        if (!isBatch) {
+            if (area.nodeType === 1) {
+                setTimeout(function () { area.scrollTop = area.scrollHeight; }, 10);
+                checkAndPaginateLive();
+            }
+            if (typeof checkAutoSum === 'function') checkAutoSum();
+        }
+
+        return row;
     }
 
     function cdAddTyping(area, explicitChatId) {
