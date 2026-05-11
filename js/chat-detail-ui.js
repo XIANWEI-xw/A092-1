@@ -387,7 +387,9 @@
             
             '<div class="multi-bar" id="cdMultiBar">' +
                 '<div class="ms-cancel" id="cdMsCancel">Cancel</div>' +
-                '<div class="ms-delete" id="cdMsDelete">Delete (0)</div>' +
+                '<div class="ms-delete" id="cdMsDelete">' +
+                    '<svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>' +
+                '</div>' +
             '</div>' +
 
             '<div class="ext-drawer" id="cdExtDrawer">' +
@@ -707,7 +709,14 @@
         /* 顶部显示逻辑：对齐顶部，如果是后接的气泡，隐藏之 */
         '#caChatDetail.av-pos-top .msg-content-wrap { align-items: flex-start; }' +
         '#caChatDetail.av-pos-top .row-received .msg-avatar { transform: translateY(0); margin-top: 4px; margin-bottom: 0; }' +
-        '#caChatDetail.av-pos-top .row-sent .msg-avatar { transform: translateY(0); margin-top: 4px; margin-bottom: 0; }' +
+        /* 遮罩 — 轻量化：仅轻微淡化背景 */
+        '#caChatDetail .lp-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.25); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); z-index: 30; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }' +
+        '#caChatDetail .lp-overlay.active { opacity: 1; pointer-events: auto; }' +
+        /* 遮罩激活时，让非高亮的气泡变淡 */
+        '#caChatDetail .lp-overlay.active ~ .msg-row:not(.highlighted) { opacity: 0.4; filter: grayscale(0.3); transition: opacity 0.3s ease; }' +
+        /* 确保高亮的消息行浮在最上层 */
+        '#caChatDetail .msg-row.highlighted { z-index: 100 !important; position: relative !important; opacity: 1 !important; }' +
+        '#caChatDetail .msg-row.highlighted .bubble { z-index: 101 !important; }' +
         '#caChatDetail.av-pos-top .row-received + .row-received .msg-avatar { opacity: 0; pointer-events: none; }' +
         '#caChatDetail.av-pos-top .row-sent + .row-sent .msg-avatar { opacity: 0; pointer-events: none; }' +
         
@@ -733,6 +742,134 @@
         '.cd-load-hint { display: flex; align-items: center; justify-content: center; gap: 15px; padding: 30px 0 10px; opacity: 0.4; pointer-events: none; }' +
         '.lh-line { height: 1px; flex: 1; background: linear-gradient(to right, transparent, #151515, transparent); }' +
         '.lh-text { font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: 2px; color: #151515; font-weight: 700; text-transform: uppercase; }' +
+        /* ── 方案 06: GHOST OUTLINE 纯净版 ── */
+        /* 彻底去掉对勾并重置位移 */
+        /* ── 方案 06: GHOST OUTLINE 彻底零位移版 ── */
+        /* 1. 彻底禁用所有位移属性 */
+        '#caChatDetail.multi-mode .msg-row {' +
+            'padding-left: 12px !important;' +
+            'padding-right: 12px !important;' +
+            'transform: none !important;' +
+            'margin-left: 0 !important;' +
+        '}' +
+        '#caChatDetail.multi-mode .msg-content-wrap {' +
+            'transform: none !important;' +
+            'margin-left: 0 !important;' +
+            'padding-left: 0 !important;' +
+        '}' +
+        '#caChatDetail.multi-mode .msg-checkbox {' +
+            'display: none !important;' +
+            'width: 0 !important;' +
+            'height: 0 !important;' +
+            'margin: 0 !important;' +
+            'opacity: 0 !important;' +
+            'pointer-events: none !important;' +
+        '}' +
+
+        /* 2. 选中后的虚线效果 */
+        '#caChatDetail .msg-row.selected .bubble {' +
+            'background: transparent !important;' +
+            'border: 1.5px dashed #151515 !important;' +
+            'color: #151515 !important;' +
+            'box-shadow: none !important;' +
+            'transform: scale(0.98);' +
+            'transition: all 0.2s ease;' +
+        '}' +
+        '#caChatDetail .msg-row.selected .msg-text { color: #151515 !important; }' +
+
+        /* 3. 底部按钮样式 */
+        '#caChatDetail .multi-bar {' +
+            'background: none !important;' +
+            'border: none !important;' +
+            'display: flex;' +
+            'align-items: center;' +
+            'justify-content: center;' +
+            'gap: 60px;' +
+            'height: 100px;' +
+            'pointer-events: none;' +
+            'z-index: 200;' +
+        '}' +
+        '#caChatDetail .ms-cancel {' +
+            'font-size: 11px;' +
+            'font-weight: 800;' +
+            'letter-spacing: 2px;' +
+            'text-transform: uppercase;' +
+            'color: #151515;' +
+            'border-bottom: 2px solid #151515;' +
+            'padding-bottom: 2px;' +
+            'cursor: pointer;' +
+            'pointer-events: auto;' +
+        '}' +
+        '#caChatDetail .ms-delete {' +
+            'width: 52px;' +
+            'height: 52px;' +
+            'border-radius: 50%;' +
+            'background: #151515;' +
+            'display: flex;' +
+            'align-items: center;' +
+            'justify-content: center;' +
+            'box-shadow: 0 10px 30px rgba(0,0,0,0.2);' +
+            'cursor: pointer;' +
+            'pointer-events: auto;' +
+            'transition: all 0.2s;' +
+        '}' +
+        '#caChatDetail .msg-row.selected .bubble {' +
+            'background: transparent !important;' +
+            'border: 1.5px dashed #151515 !important;' +
+            'color: #151515 !important;' +
+            'box-shadow: none !important;' +
+            'transform: scale(0.98);' +
+            'transition: all 0.2s ease;' +
+        '}' +
+        '#caChatDetail .msg-row.selected .msg-text { color: #151515 !important; }' +
+        '#caChatDetail .multi-bar {' +
+            'background: none !important;' + /* 去掉背景胶囊 */
+            'border: none !important;' +
+            'box-shadow: none !important;' +
+            'backdrop-filter: none !important;' +
+            '-webkit-backdrop-filter: none !important;' +
+            'display: flex;' +
+            'align-items: center;' +
+            'justify-content: center;' +
+            'gap: 60px;' +
+            'height: 100px;' +
+            'pointer-events: none;' + /* 穿透容器 */
+            'z-index: 200;' +
+        '}' +
+        '#caChatDetail .ms-cancel {' +
+            'font-size: 11px;' +
+            'font-weight: 800;' +
+            'letter-spacing: 2px;' +
+            'text-transform: uppercase;' +
+            'color: #151515;' +
+            'border-bottom: 2px solid #151515;' +
+            'padding-bottom: 2px;' +
+            'cursor: pointer;' +
+            'pointer-events: auto;' +
+            'transition: opacity 0.2s;' +
+        '}' +
+        '#caChatDetail .ms-delete {' +
+            'width: 52px;' +
+            'height: 52px;' +
+            'border-radius: 50%;' +
+            'background: #151515;' +
+            'display: flex;' +
+            'align-items: center;' +
+            'justify-content: center;' +
+            'box-shadow: 0 10px 30px rgba(0,0,0,0.2);' +
+            'cursor: pointer;' +
+            'pointer-events: auto;' +
+            'transition: transform 0.2s, opacity 0.2s;' +
+        '}' +
+        '#caChatDetail .ms-delete svg {' +
+            'width: 22px;' +
+            'height: 22px;' +
+            'stroke: #fff;' +
+            'fill: none;' +
+            'stroke-width: 2;' +
+        '}' +
+        '#caChatDetail .ms-delete:active { transform: scale(0.9); }' +
+        '#caChatDetail .ms-cancel:active { opacity: 0.5; }' +
     '</style>';
 }
 

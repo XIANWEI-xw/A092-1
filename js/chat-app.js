@@ -1031,8 +1031,6 @@
         var area = document.getElementById('cdChatArea');
         if (!area) return;
         var msgs = conversations[currentChatId] || [];
-        if (msgs.length <= cdDisplayLimit) return;
-
         var rows = Array.from(area.querySelectorAll('.msg-row:not(#cdTypingRow)'));
         if (rows.length <= 18) return;
 
@@ -1042,32 +1040,27 @@
         }
 
         if (!document.getElementById('cdLoadSentinel')) {
-            var startIdx = msgs.length - cdDisplayLimit;
+            var startIdx = msgs.length - rows.length;
             var sentinel = document.createElement('div');
             sentinel.className = 'cd-load-hint';
             sentinel.id = 'cdLoadSentinel';
-            sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
-            sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(startIdx / 18) + '</div><div class="lh-line"></div>';
-            sentinel.onclick = function(e) {
+            sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;width:100%;';
+            sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · SEC_' + Math.ceil(msgs.length / 18) + '</div><div class="lh-line"></div>';
+            
+            var triggerLoad = function(e) {
                 e.stopPropagation();
-                if (cdDisplayLimit < (conversations[currentChatId] || []).length) {
+                var total = (conversations[currentChatId] || []).length;
+                if (cdDisplayLimit < total) {
                     cdDisplayLimit += 18;
                     renderMessages(currentChatId, true);
                 }
             };
-            sentinel.ontouchend = function(e) {
-                e.stopPropagation();
-                if (cdDisplayLimit < (conversations[currentChatId] || []).length) {
-                    cdDisplayLimit += 18;
-                    renderMessages(currentChatId, true);
-                }
-            };
+            sentinel.onclick = triggerLoad;
+            sentinel.ontouchend = triggerLoad;
+
             var sysMsg = area.querySelector('.sys-msg');
-            var firstRow = area.querySelector('.msg-row:not(#cdTypingRow)');
             if (sysMsg && sysMsg.nextSibling) {
                 area.insertBefore(sentinel, sysMsg.nextSibling);
-            } else if (firstRow) {
-                area.insertBefore(sentinel, firstRow);
             } else {
                 area.insertBefore(sentinel, area.firstChild);
             }
@@ -1078,16 +1071,18 @@
         var area = document.getElementById('cdChatArea');
         var allMsgs = conversations[entId] || [];
         var ent = entities.find(function (e) { return e.id === entId; });
+        if (!ent) return;
         
         var oldHeight = area.scrollHeight;
-        
         area.style.scrollBehavior = 'auto';
 
-        area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div>';
+        /* 保留遮罩和覆盖层 */
+        area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
         cdLastMsgType = null;
         cdLastMsgRow = null;
 
-        var startIdx = Math.max(0, allMsgs.length - cdDisplayLimit);
+        var currentLimit = cdDisplayLimit || 18;
+        var startIdx = Math.max(0, allMsgs.length - currentLimit);
         var visibleMsgs = allMsgs.slice(startIdx);
         var fragment = document.createDocumentFragment();
         
@@ -1598,16 +1593,13 @@
         var msgs = conversations[currentChatId];
         if (!msgs || msgs.length === 0) return;
 
-        /* 立即在列表显示打字中状态，点击调取键瞬间生效 */
         var trigChatId = currentChatId;
         var trigEnt = entities.find(function(e) { return e.id === trigChatId; });
         if (trigEnt) {
-            /* 记录到全局 map，renderChats 渲染后会自动应用 */
             typingStateMap[trigEnt.id] = true;
             renderChats();
         }
 
-        // 1. 把所有显示为 DELIVERED 的消息状态变更为 READ
         var area = document.getElementById('cdChatArea');
         var metas = area.querySelectorAll('.row-sent .msg-meta');
         var readTime = cdGetNowTime();
@@ -1617,54 +1609,39 @@
             }
         });
 
-        // 2. 找到最近一条用户发的消息内容用于触发AI
         var lastMsg = msgs[msgs.length - 1];
         var triggerText = lastMsg.role === 'user' ? lastMsg.text : "Continue";
         var chatId = currentChatId;
 
-        // 3. 调取 AI
         setTimeout(function () {
             var typingRow = cdAddTyping(area, chatId);
-            typingRow.dataset.msgIndex = conversations[chatId].length;
             callAI(chatId, triggerText, function (reply) {
-                /* 拆分气泡段落：先按 |||| 拆，每段再按换行拆，但要保留 |||TRANS||| 完整 */
                 var rawSegs = reply.split('||||');
                 var segments = [];
                 rawSegs.forEach(function(rs) {
-                    /* 临时把 |||TRANS||| 替换成占位符防止被换行误拆 */
                     var _prot = rs.replace(/\|\|\|TRANS\|\|\|/g, '\u0001TRANS\u0001');
                     var subs = _prot.split(/\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
-                    subs.forEach(function(s) {
-                        segments.push(s.replace(/\u0001TRANS\u0001/g, '|||TRANS|||'));
-                    });
+                    subs.forEach(function(s) { segments.push(s.replace(/\u0001TRANS\u0001/g, '|||TRANS|||')); });
                 });
 
-                /* 存储时把多段用换行保存 */
                 var fullReply = segments.join('\n');
                 var aiMsg = { role: 'assistant', text: fullReply, time: dateNow() + ' ' + timeNow() };
                 conversations[chatId].push(aiMsg);
+                var aiMsgIdx = conversations[chatId].length - 1;
                 saveOneConversation(chatId);
 
-                /* 每段各自处理 |||TRANS||| 分隔符再传给 cdResolve */
                 function resolveSegment(row, seg) {
-                    var mainText = seg;
-                    var transText = '';
+                    var mainText = seg, transText = '';
                     if (seg.indexOf('|||TRANS|||') !== -1) {
                         var parts = seg.split('|||TRANS|||');
-                        mainText = parts[0].trim();
-                        transText = parts[1] ? parts[1].trim() : '';
+                        mainText = parts[0].trim(); transText = parts[1] ? parts[1].trim() : '';
                     }
-                    /* 过滤时间戳垃圾 */
-                    mainText = mainText.replace(/\[CURRENT TIME[^\]]*\]/gi, '').trim();
-                    mainText = mainText.replace(/\[SYS_TIME[^\]]*\]/gi, '').trim();
-                    if (!mainText && !transText) {
-                        if (row && row.parentNode) row.parentNode.removeChild(row);
-                        return;
-                    }
-                    /* 直接传原始文本，cdResolve 内部自己 escapeHtml */
+                    mainText = mainText.replace(/\[CURRENT TIME[^\]]*\]/gi, '').replace(/\[SYS_TIME[^\]]*\]/gi, '').trim();
+                    if (!mainText && !transText) { if (row && row.parentNode) row.parentNode.removeChild(row); return; }
                     cdResolve(row, mainText + (transText ? '|||TRANS|||' + transText : ''), cdGetNowTime());
                 }
 
+                typingRow.dataset.msgIndex = aiMsgIdx;
                 if (segments.length <= 1) {
                     resolveSegment(typingRow, segments[0] || '');
                 } else {
@@ -1672,15 +1649,14 @@
                     var i = 1;
                     function showNext() {
                         if (i >= segments.length) return;
-                        var delay = 300 + Math.random() * 700;
                         setTimeout(function () {
                             var nextTyping = cdAddTyping(area, chatId);
-                            nextTyping.dataset.msgIndex = conversations[chatId].length - 1;
+                            nextTyping.dataset.msgIndex = aiMsgIdx;
                             setTimeout(function () {
                                 resolveSegment(nextTyping, segments[i]);
                                 i++; showNext();
                             }, 400 + Math.random() * 800);
-                        }, delay);
+                        }, 300 + Math.random() * 700);
                     }
                     showNext();
                 }
@@ -3431,7 +3407,10 @@
                 });
             }
             if (mask) mask.classList.remove('active');
-            if (overlay) overlay.classList.remove('active');
+            
+            /* 确保遮罩被正确移除 */
+            var overlayEl = overlay || document.getElementById('cdLpOverlay');
+            if (overlayEl) overlayEl.classList.remove('active');
 
             /* 移除 Weight Drop 效果并清理残留样式 */
             var area = document.getElementById('cdChatArea');
@@ -3450,6 +3429,11 @@
                 });
             }
 
+            /* 清理所有高亮和选中状态，恢复周围气泡亮度 */
+            var area = document.getElementById('cdChatArea');
+            if (area) {
+                area.querySelectorAll('.msg-row.highlighted').forEach(function(r) { r.classList.remove('highlighted'); });
+            }
             if (cmActiveRow) cmActiveRow.classList.remove('highlighted');
             cmActiveRow = null;
             cmActiveBtn = null;
@@ -3458,30 +3442,32 @@
         function updateMultiBar() {
             var delBtn = document.getElementById('cdMsDelete');
             if (delBtn) {
-                delBtn.textContent = 'Delete (' + selectedMsgs.size + ')';
-                delBtn.style.opacity = selectedMsgs.size > 0 ? '1' : '0.5';
+                /* 图标版不显示数字，通过缩放和透明度表示状态 */
+                delBtn.style.opacity = selectedMsgs.size > 0 ? '1' : '0.2';
+                delBtn.style.pointerEvents = selectedMsgs.size > 0 ? 'auto' : 'none';
+                delBtn.style.transform = selectedMsgs.size > 0 ? 'scale(1)' : 'scale(0.85)';
             }
         }
 
         var detailEl = document.getElementById('caChatDetail');
 
-        /* 点击：多选模式下切换选中消息（单选，只能通过取消按钮退出） */
+        /* 点击：多选模式下切换选中状态（多选） */
         detailEl.addEventListener('click', function(e) {
             if (!isMultiMode) return;
             e.stopPropagation();
             var row = e.target.closest('.msg-row');
             if (!row || row.id === 'cdTypingRow') return;
+            
             var idx = parseInt(row.dataset.msgIndex, 10);
             if (isNaN(idx)) return;
 
-            var area = document.getElementById('cdChatArea');
-            if (area) {
-                area.querySelectorAll('.msg-row.selected').forEach(function(r) { r.classList.remove('selected'); });
-                area.querySelectorAll('.msg-row.highlighted').forEach(function(r) { r.classList.remove('highlighted'); });
+            if (selectedMsgs.has(idx)) {
+                selectedMsgs.delete(idx);
+                row.classList.remove('selected');
+            } else {
+                selectedMsgs.add(idx);
+                row.classList.add('selected');
             }
-            selectedMsgs.clear();
-            selectedMsgs.add(idx);
-            row.classList.add('selected');
             updateMultiBar();
         });
 
@@ -3492,8 +3478,8 @@
 
             var row = e.target.closest('.msg-row');
             if (!row || row.id === 'cdTypingRow') return;
-            if (!area.contains(row)) return;
-
+            
+            /* 即使点到头像或空白处，也强制锁定到该行的气泡 */
             var bubble = row.querySelector('.bubble');
             if (!bubble) return;
 
@@ -3518,8 +3504,14 @@
             /* 不在按下时立即加任何 class，避免点击触发动画 */
             clearTimeout(cmTimer);
             cmTimer = setTimeout(function() {
+                /* 1. 先激活遮罩，触发周围气泡变淡 */
+                if (overlay) overlay.classList.add('active');
 
-                /* Weight Drop 触发：重置所有子元素动画后激活 lp-lifted */
+                /* 2. 锁定高亮行，使其保持不透明并置顶 */
+                cmActiveRow = row;
+                row.classList.add('highlighted');
+
+                /* 3. Weight Drop 动画处理 */
                 var allAnimEls = bubble.querySelectorAll('*');
                 allAnimEls.forEach(function(el) {
                     el.style.animation = 'none';
@@ -3534,18 +3526,12 @@
 
                 bubble.classList.add('lp-lifted');
 
-                /* 激活遮罩 */
-                if (overlay) overlay.classList.add('active');
-
-                /* 震动反馈 */
+                /* 4. 震动反馈 */
                 if (navigator.vibrate) navigator.vibrate(8);
 
-                cmActiveRow = row;
                 var cm = document.getElementById('cdContextMenu');
                 var mask = document.getElementById('cdChatMask');
                 if (!cm) return;
-
-                row.classList.add('highlighted');
                 if (mask) mask.classList.add('active');
 
                 var bubbleRectF = bubble.getBoundingClientRect();
@@ -3729,24 +3715,19 @@
                 var area = document.getElementById('cdChatArea');
                 var rows = area ? area.querySelectorAll('.msg-row') : [];
                 var toDeleteRows = [];
-                var foundTarget = false;
+                
                 rows.forEach(function(r) {
                     if (r.id === 'cdTypingRow') return;
                     var idx = parseInt(r.dataset.msgIndex, 10);
-                    if (!foundTarget) {
-                        if (!isNaN(idx) && idx === index) {
-                            foundTarget = true;
-                        }
-                        return;
+                    if (!isNaN(idx) && idx >= index) {
+                        toDeleteRows.push(r);
                     }
-                    toDeleteRows.push(r);
                 });
 
-                if (toDeleteRows.length === 0) {
-                    conversations[chatId] = msgs.slice(0, index + 1);
-                    saveOneConversation(chatId);
-                    return;
-                }
+                if (toDeleteRows.length === 0) return;
+
+                conversations[chatId] = msgs.slice(0, index);
+                saveOneConversation(chatId);
 
                 if (!document.getElementById('rb-style-node')) {
                     var style = document.createElement('style');
@@ -3976,22 +3957,24 @@
 
             } else if (action === 'multi') {
                 isMultiMode = true;
-                multiModeEnteredAt = Date.now();
-                multiCancelLock = true;
-                /* 进入后 800ms 内不允许通过点击退出多选 */
-                setTimeout(function() { multiCancelLock = false; }, 800);
                 selectedMsgs.clear();
                 document.getElementById('caChatDetail').classList.add('multi-mode');
+                
                 var area2 = document.getElementById('cdChatArea');
                 if (area2) {
-                    area2.querySelectorAll('.msg-row.selected, .msg-row.highlighted').forEach(function(r) {
-                        r.classList.remove('selected'); r.classList.remove('highlighted');
+                    area2.querySelectorAll('.msg-row').forEach(function(r) {
+                        r.classList.remove('selected');
+                        r.classList.remove('highlighted');
                     });
                 }
-                if (index >= 0 && savedRow) {
-                    selectedMsgs.add(index);
-                    savedRow.classList.add('selected');
+
+                /* 确保长按的那条消息被选中 */
+                var initialIdx = parseInt(index, 10);
+                if (!isNaN(initialIdx)) {
+                    selectedMsgs.add(initialIdx);
+                    if (savedRow) savedRow.classList.add('selected');
                 }
+                
                 updateMultiBar();
                 closeContextMenu();
             }
@@ -4033,17 +4016,22 @@
         
         if (msDeleteBtn) {
             msDeleteBtn.addEventListener('click', function() {
-                if (selectedMsgs.size === 0) return;
+                if (!currentChatId || selectedMsgs.size === 0) return;
                 if (confirm('Delete ' + selectedMsgs.size + ' message(s)?')) {
-                    var msgs = conversations[currentChatId];
-                    conversations[currentChatId] = msgs.filter(function(_, idx) {
+                    var oldMsgs = conversations[currentChatId] || [];
+                    var newMsgs = oldMsgs.filter(function(_, idx) {
                         return !selectedMsgs.has(idx);
                     });
+                    
+                    conversations[currentChatId] = newMsgs;
                     saveOneConversation(currentChatId);
+                    
                     isMultiMode = false;
                     selectedMsgs.clear();
                     document.getElementById('caChatDetail').classList.remove('multi-mode');
+                    
                     renderMessages(currentChatId);
+                    renderChats();
                 }
             });
         }
