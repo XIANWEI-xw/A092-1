@@ -1028,7 +1028,13 @@
             cdLastMsgType = null;
             cdLastMsgRow = null;
             cdExitFloating();
+            area.style.opacity = '0';
             renderConvToDOM(conversations[entId] || [], false);
+            requestAnimationFrame(function() {
+                area.style.transition = 'opacity 0.15s ease';
+                area.style.opacity = '1';
+                setTimeout(function() { area.style.transition = ''; }, 200);
+            });
         }
 
         var headerEl = detail.querySelector('.header-system');
