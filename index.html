@@ -10,8 +10,12 @@
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://chatbotcos.weixin.qq.com/chatbot/30-openaiassets_25bb7ee042e09f9b90273daf8cb56699_4818891778186903087.jpg">
 
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Space+Grotesk:wght@300;400;500;700;900&family=Great+Vibes&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Space+Grotesk:wght@300;400;500;700;900&family=Great+Vibes&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
     <link rel="stylesheet" href="css/00-variables.css">
     <link rel="stylesheet" href="css/01-frame.css">
     <link rel="stylesheet" href="css/02-theme.css">
@@ -61,6 +65,8 @@
     <script src="js/lens-app.js"></script>
     <script src="js/worldbook-app.js"></script>
     <script>
+        /* SW temporarily disabled for performance testing */
+        /*
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 navigator.serviceWorker.register('./sw.js').then(function(registration) {
@@ -70,6 +76,7 @@
                 });
             });
         }
+        */
     </script>
 </body>
 </html>
