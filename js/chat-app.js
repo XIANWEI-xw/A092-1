@@ -1408,9 +1408,13 @@
             var sentinel2 = document.getElementById('cdLoadSentinel');
             if (sentinel2) bindSentinel(sentinel2);
 
-            if (!area.dataset.scrollBoundLoad) {
-                area.addEventListener('scroll', function() {
-                    if (area.scrollTop < 80 && !isMessagesLoading && currentChatId) {
+            if (!window._cdScrollBound) {
+            var scrollArea = document.getElementById('cdChatArea');
+            if (scrollArea) {
+                scrollArea.addEventListener('scroll', function() {
+                    var a = document.getElementById('cdChatArea');
+                    if (!a) return;
+                    if (a.scrollTop < 80 && !isMessagesLoading && currentChatId) {
                         var msgs2 = conversations[currentChatId] || [];
                         if (cdDisplayLimit < msgs2.length) {
                             isMessagesLoading = true;
@@ -1419,19 +1423,21 @@
                                 hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
                             }
                             var loadChatId = currentChatId;
-                            area.style.pointerEvents = 'none';
+                            a.style.pointerEvents = 'none';
                             setTimeout(function() {
                                 requestAnimationFrame(function() {
                                     cdDisplayLimit += 18;
                                     renderConvToDOM(conversations[loadChatId] || [], true);
-                                    area.style.pointerEvents = '';
+                                    var a2 = document.getElementById('cdChatArea');
+                                    if (a2) a2.style.pointerEvents = '';
                                 });
                             }, 150);
                         }
                     }
                 }, { passive: true });
-                area.dataset.scrollBoundLoad = 'true';
+                window._cdScrollBound = true;
             }
+        }
         }
     }
 
