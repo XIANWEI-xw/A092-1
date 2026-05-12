@@ -1484,7 +1484,8 @@
                         r.dataset.msgIndex = String(realIdx);
                         r.dataset.segIndex = String(segIdx);
                         r.dataset.segTotal = String(segments.length);
-                        newArea.appendChild(r);
+                        area.appendChild
+(r);
                     });
                 } else {
                     var r = cdBuildRow(rawText, type, timeStr, isSent ? 'READ' : '', false);
