@@ -982,6 +982,37 @@
         var hasTypingRow = area && !!area.querySelector('#cdTypingRow');
         if (isSameChat && hasTypingRow) {
             setTimeout(function () { if (area) area.scrollTop = area.scrollHeight; }, 20);
+        } else if (isSameChat && area.querySelector('.msg-row')) {
+            /* 同一个聊天且已有消息渲染，只补齐新增的消息到底部 */
+            var existingCount = area.querySelectorAll('.msg-row').length;
+            var allMsgs = conversations[entId] || [];
+            var startFrom = Math.max(0, allMsgs.length - cdDisplayLimit);
+            /* 找到 DOM 中最后一条消息的 index，从它之后开始追加 */
+            var lastRow = area.querySelector('.msg-row:last-of-type');
+            var lastIdx = lastRow ? parseInt(lastRow.dataset.msgIndex || '-1', 10) : -1;
+            if (lastIdx >= 0 && lastIdx < allMsgs.length - 1) {
+                for (var ni = lastIdx + 1; ni < allMsgs.length; ni++) {
+                    var nm = allMsgs[ni];
+                    if (nm.role === 'info') {
+                        var dcEl = buildDirectorNotifEl(nm);
+                        if (dcEl) { area.appendChild(dcEl); continue; }
+                    }
+                    if (nm.role === 'user' || nm.role === 'assistant') {
+                        var nType = nm.role === 'user' ? 'sent' : 'received';
+                        var nTime = formatStoredTime((nm.time || '').split(' ')[1] || nm.time);
+                        var nText = nm.role === 'user' ? stripSysTime(nm.text) : nm.text;
+                        var nRow = cdBuildRow(nText, nType, nTime, nm.role === 'user' ? 'READ' : '', false);
+                        nRow.dataset.msgIndex = String(ni);
+                        nRow.dataset.segIndex = '0';
+                        nRow.dataset.segTotal = '1';
+                        area.appendChild(nRow);
+                    }
+                }
+                updateMsgGrouping();
+            }
+            area.style.scrollBehavior = 'auto';
+            area.scrollTop = area.scrollHeight;
+            setTimeout(function() { area.style.scrollBehavior = ''; }, 50);
         } else {
             cdLastMsgType = null;
             cdLastMsgRow = null;
@@ -1399,10 +1430,7 @@
         } else {
             cdLastMsgType = null;
             cdLastMsgRow = null;
-            var newArea = document.createElement('main');
-            newArea.className = 'chat-area';
-            newArea.id = 'cdChatArea';
-            newArea.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
+            area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
 
             if (startIdx > 0) {
                 var loadHint2 = document.createElement('div');
@@ -1457,9 +1485,6 @@
                 }
             });
 
-            area.replaceWith(newArea);
-            window._cdScrollBound = false;
-            area = newArea;
             updateMsgGrouping();
 
             area.style.scrollBehavior = 'auto';
