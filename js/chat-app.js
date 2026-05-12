@@ -1399,7 +1399,10 @@
         } else {
             cdLastMsgType = null;
             cdLastMsgRow = null;
-            area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
+            var newArea = document.createElement('main');
+            newArea.className = 'chat-area';
+            newArea.id = 'cdChatArea';
+            newArea.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
 
             if (startIdx > 0) {
                 var loadHint2 = document.createElement('div');
@@ -1407,14 +1410,14 @@
                 loadHint2.id = 'cdLoadSentinel';
                 loadHint2.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
                 loadHint2.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(startIdx / 18) + '</div><div class="lh-line"></div>';
-                frag.appendChild(loadHint2);
+                area.appendChild(loadHint2);
             }
 
             var sysEl = document.createElement('div');
             sysEl.className = 'sys-msg';
             var ent = entities.find(function(e) { return e.id === currentChatId; });
             sysEl.textContent = 'Conversation with ' + (ent ? ent.name : '');
-            frag.appendChild(sysEl);
+            area.appendChild(sysEl);
 
             visibleMsgs.forEach(function(m, vIdx) {
                 var realIdx = startIdx + vIdx;
@@ -1427,7 +1430,7 @@
                     infoEl.innerHTML = '<div style="background:rgba(21,21,21,0.03); border:1px solid rgba(21,21,21,0.06); border-radius:12px; padding:6px 12px; display:flex; align-items:center; gap:12px; max-width:85%; box-shadow:0 2px 8px rgba(0,0,0,0.02);"><div style="font-size:10px; color:rgba(21,21,21,0.5); font-weight:600; line-height:1.4; letter-spacing:0.3px;">' + escapeHtml(m.text) + '</div><div class="sys-eye-btn" style="cursor:pointer; padding:2px; transition:all 0.2s; display:flex; align-items:center; justify-content:center;" title="Toggle AI Visibility">' + (m.ai_visible ? openEye : closedEye) + '</div></div>';
                     var eyeBtn = infoEl.querySelector('.sys-eye-btn');
                     eyeBtn.addEventListener('click', function() { m.ai_visible = !m.ai_visible; saveOneConversation(currentChatId); eyeBtn.innerHTML = m.ai_visible ? openEye : closedEye; });
-                    frag.appendChild(infoEl);
+                    area.appendChild(infoEl);
                     return;
                 }
                 var isSent = m.role === 'user';
@@ -1454,6 +1457,9 @@
                 }
             });
 
+            area.replaceWith(newArea);
+            window._cdScrollBound = false;
+            area = newArea;
             updateMsgGrouping();
 
             area.style.scrollBehavior = 'auto';
