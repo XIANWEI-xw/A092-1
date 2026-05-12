@@ -69,8 +69,8 @@
             '@keyframes ca-plaque-swing { 0% { transform: translateY(-8px) rotate(-3deg); opacity: 0; } 45% { transform: translateY(1.5px) rotate(1.5deg); opacity: 1; } 65% { transform: translateY(-0.5px) rotate(-0.5deg); } 85% { transform: translateY(0) rotate(0.2deg); } 100% { transform: translateY(0) rotate(0deg); opacity: 1; } }' +
             '.ca-header-hanging { transform-origin: top center; }' +
             '.ca-header-hanging.anim-swing { animation: ca-plaque-swing 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }' +
-            '.chat-area { -webkit-overflow-scrolling: touch; will-change: transform, scroll-position; transform: translateZ(0); contain: strict; }' +
-            '.msg-row { -webkit-transform: translateZ(0); transform: translateZ(0); will-change: transform, opacity; }' +
+            '.chat-area { -webkit-overflow-scrolling: touch; transform: translateZ(0); }' +
+            '.msg-row { -webkit-transform: translateZ(0); transform: translateZ(0); }' +
             '.bubble { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }' +
             '@media (min-width: 431px) {' +
                 '.chat-app-window { top: 50% !important; left: 50% !important; bottom: auto !important; right: auto !important; transform: translate(-50%, -50%) translateZ(0) !important; }' +
@@ -1419,12 +1419,14 @@
                                 hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
                             }
                             var loadChatId = currentChatId;
-                            requestAnimationFrame(function() {
+                            area.style.pointerEvents = 'none';
+                            setTimeout(function() {
                                 requestAnimationFrame(function() {
                                     cdDisplayLimit += 18;
                                     renderConvToDOM(conversations[loadChatId] || [], true);
+                                    area.style.pointerEvents = '';
                                 });
-                            });
+                            }, 150);
                         }
                     }
                 }, { passive: true });
