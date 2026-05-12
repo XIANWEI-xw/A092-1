@@ -885,7 +885,7 @@
         '/* Director Notification */' +
         '.dc-notif-row { width: 100%; display: flex; justify-content: center; margin: 8px 0; animation: dcSlideUp 0.4s cubic-bezier(0.16,1,0.3,1); }' +
         '@keyframes dcSlideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }' +
-        '.dc-notif-glass { background: rgba(255,255,255,0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 0.5px solid rgba(0,0,0,0.08); border-radius: 24px; padding: 8px 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 88%; display: flex; gap: 10px; align-items: flex-start; }' +
+        '.dc-notif-glass { background: rgba(255,255,255,0.92); border: 0.5px solid rgba(0,0,0,0.08); border-radius: 24px; padding: 8px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); width: 88%; display: flex; gap: 10px; align-items: flex-start; }' +
         '.dc-notif-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 50px; letter-spacing: 1px; flex-shrink: 0; font-family: "Share Tech Mono", monospace; margin-top: 1.5px; }' +
         '.dc-notif-body { flex: 1; min-width: 0; }' +
         '.dc-notif-directive { font-size: 12px; font-weight: 600; color: #151515; line-height: 1.3; word-wrap: break-word; }' +

@@ -1112,6 +1112,31 @@
         return rawTime;
     }
 
+    function buildDirectorNotifEl(m) {
+        var dcMatch = m.text.match(/^::(NARRATOR_INJECT|ACTION_INJECT|CORRECTION_OVERRIDE)::\{[^}]*\}::\s*([\s\S]*)$/);
+        if (!dcMatch) return null;
+        var dcTypeMap = { 'NARRATOR_INJECT': '旁白', 'ACTION_INJECT': '动作', 'CORRECTION_OVERRIDE': '纠错' };
+        var dcType = dcTypeMap[dcMatch[1]] || '旁白';
+        var dcRaw = dcMatch[2].trim();
+        var dcContent = dcRaw;
+        var dcLazy = '';
+        if (dcRaw.indexOf('|||LAZY|||') !== -1) {
+            var parts = dcRaw.split('|||LAZY|||');
+            dcContent = parts[0].trim();
+            dcLazy = parts[1] ? parts[1].trim() : '';
+        }
+        var el = document.createElement('div');
+        el.className = 'dc-notif-row';
+        var lazyHtml = dcLazy ? '<div class="dc-notif-lazy">"' + escapeHtml(dcLazy) + '"</div>' : '';
+        el.innerHTML = '<div class="dc-notif-glass" data-type="' + dcType + '">' +
+            '<div class="dc-notif-badge">' + dcType + '</div>' +
+            '<div class="dc-notif-body">' +
+                (dcContent ? '<div class="dc-notif-directive">' + escapeHtml(dcContent) + '</div>' : '') +
+                lazyHtml +
+            '</div></div>';
+        return el;
+    }
+
     function buildMsgFragment(msgs, startIdx) {
         var fragment = document.createDocumentFragment();
         msgs.forEach(function(m, vIdx) {
@@ -1313,6 +1338,11 @@
                 if (alreadyExists) return;
                 if (m.role === 'info') {
                     if (m.ai_visible === undefined) m.ai_visible = true;
+                    var dcEl = buildDirectorNotifEl(m);
+                    if (dcEl) {
+                        fragment.appendChild(dcEl);
+                        return;
+                    }
                     var infoEl = document.createElement('div');
                     infoEl.style.cssText = 'display:flex; justify-content:center; margin: 16px 0; width:100%;';
                     var openEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:rgba(21,21,21,0.6);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
@@ -1367,11 +1397,11 @@
             if (sentinel) bindSentinel(sentinel);
 
         } else {
-            area.style.visibility = 'hidden';
-            area.style.pointerEvents = 'none';
-            area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
             cdLastMsgType = null;
             cdLastMsgRow = null;
+            var frag = document.createDocumentFragment();
+            var tempMask = document.createElement('div'); tempMask.className = 'chat-mask'; tempMask.id = 'cdChatMask'; frag.appendChild(tempMask);
+            var tempOverlay = document.createElement('div'); tempOverlay.className = 'lp-overlay'; tempOverlay.id = 'cdLpOverlay'; frag.appendChild(tempOverlay);
 
             if (startIdx > 0) {
                 var loadHint2 = document.createElement('div');
@@ -1426,10 +1456,10 @@
                 }
             });
 
+            area.innerHTML = '';
+            area.appendChild(frag);
             updateMsgGrouping();
 
-            area.style.visibility = '';
-            area.style.pointerEvents = '';
             area.style.scrollBehavior = 'auto';
             area.scrollTop = area.scrollHeight;
 
@@ -2301,7 +2331,17 @@
         history.forEach(function (m) {
             if (m.role === 'info') {
                 if (m.ai_visible) {
-                    apiMessages.push({ role: 'system', content: '[INJECTED_DIRECTIVE — NOT user speech. Do NOT reply to this as if the user said it. Do NOT quote or reference this text in your response. Silently absorb and comply.]\n' + m.text });
+                    var infoContent = m.text;
+                    var lazyContent = '';
+                    if (infoContent.indexOf('|||LAZY|||') !== -1) {
+                        var lParts = infoContent.split('|||LAZY|||');
+                        infoContent = lParts[0].trim();
+                        lazyContent = lParts[1] ? lParts[1].trim() : '';
+                    }
+                    apiMessages.push({ role: 'system', content: '[INJECTED_DIRECTIVE — NOT user speech. Do NOT reply to this as if the user said it. Do NOT quote or reference this text in your response. Silently absorb and comply.]\n' + infoContent });
+                    if (lazyContent) {
+                        apiMessages.push({ role: 'user', content: lazyContent });
+                    }
                 }
                 return;
             }
@@ -2361,8 +2401,18 @@
         history.forEach(function (m) {
             if (m.role === 'info') {
                 if (m.ai_visible) {
-                    msgList.push({ role: 'user', content: '[INJECTED_DIRECTIVE — NOT user speech. This is a system-level stage direction. Do NOT treat as dialogue. Do NOT reply to this. Silently absorb and comply.]\n' + m.text });
+                    var infoContent = m.text;
+                    var lazyContent = '';
+                    if (infoContent.indexOf('|||LAZY|||') !== -1) {
+                        var lParts = infoContent.split('|||LAZY|||');
+                        infoContent = lParts[0].trim();
+                        lazyContent = lParts[1] ? lParts[1].trim() : '';
+                    }
+                    msgList.push({ role: 'user', content: '[INJECTED_DIRECTIVE — NOT user speech. This is a system-level stage direction. Do NOT treat as dialogue. Do NOT reply to this. Silently absorb and comply.]\n' + infoContent });
                     msgList.push({ role: 'assistant', content: '[Understood. Directive absorbed silently.]' });
+                    if (lazyContent) {
+                        msgList.push({ role: 'user', content: lazyContent });
+                    }
                 }
                 return;
             }
@@ -2426,14 +2476,27 @@
         history.forEach(function (m) {
             if (m.role === 'info') {
                 if (m.ai_visible) {
+                    var infoContent = m.text;
+                    var lazyContent = '';
+                    if (infoContent.indexOf('|||LAZY|||') !== -1) {
+                        var lParts = infoContent.split('|||LAZY|||');
+                        infoContent = lParts[0].trim();
+                        lazyContent = lParts[1] ? lParts[1].trim() : '';
+                    }
                     contents.push({
                         role: 'user',
-                        parts: [{ text: '[INJECTED_DIRECTIVE — NOT user speech. System-level stage direction. Do NOT treat as dialogue. Silently absorb and comply.]\n' + m.text }]
+                        parts: [{ text: '[INJECTED_DIRECTIVE — NOT user speech. System-level stage direction. Do NOT treat as dialogue. Silently absorb and comply.]\n' + infoContent }]
                     });
                     contents.push({
                         role: 'model',
                         parts: [{ text: '[Directive absorbed.]' }]
                     });
+                    if (lazyContent) {
+                        contents.push({
+                            role: 'user',
+                            parts: [{ text: lazyContent }]
+                        });
+                    }
                 }
                 return;
             }
@@ -2756,22 +2819,20 @@
                 area.appendChild(notifEl);
                 setTimeout(function() { area.scrollTop = area.scrollHeight; }, 10);
 
-                /* 存入对话记录：指令部分为 info（系统提示，AI可见但不认为是user发的）；偷懒代发部分为 user 消息 */
+                /* 存入对话记录：全部合并为一条 info，用分隔符保存偷懒代发内容 */
                 if (!conversations[currentChatId]) conversations[currentChatId] = [];
 
-                if (directiveText) {
-                    var dirPrefix = '';
-                    if (typeVal === '旁白') dirPrefix = '::NARRATOR_INJECT::{type:environment_description,speaker:NONE,is_user_speech:FALSE}:: ';
-                    else if (typeVal === '动作') dirPrefix = '::ACTION_INJECT::{type:physical_action,performer:user_character,is_user_speech:FALSE,note:THIS_IS_NOT_DIALOGUE}:: ';
-                    else if (typeVal === '纠错') dirPrefix = '::CORRECTION_OVERRIDE::{type:behavior_correction,target:your_last_response,is_user_speech:FALSE,priority:ABSOLUTE,instruction:SILENTLY_COMPLY}:: ';
-                    var infoText = dirPrefix + directiveText;
-                    conversations[currentChatId].push({ role: 'info', text: infoText, ai_visible: true, time: dateNow() + ' ' + timeNow() });
-                }
+                var dirPrefix = '';
+                if (typeVal === '旁白') dirPrefix = '::NARRATOR_INJECT::{type:environment_description,speaker:NONE,is_user_speech:FALSE}:: ';
+                else if (typeVal === '动作') dirPrefix = '::ACTION_INJECT::{type:physical_action,performer:user_character,is_user_speech:FALSE,note:THIS_IS_NOT_DIALOGUE}:: ';
+                else if (typeVal === '纠错') dirPrefix = '::CORRECTION_OVERRIDE::{type:behavior_correction,target:your_last_response,is_user_speech:FALSE,priority:ABSOLUTE,instruction:SILENTLY_COMPLY}:: ';
 
+                var storedText = dirPrefix + directiveText;
                 if (lazyText) {
-                    conversations[currentChatId].push({ role: 'user', text: lazyText, time: dateNow() + ' ' + timeNow() });
+                    storedText += '|||LAZY|||' + lazyText;
                 }
 
+                conversations[currentChatId].push({ role: 'info', text: storedText, ai_visible: true, time: dateNow() + ' ' + timeNow() });
                 saveOneConversation(currentChatId);
 
                 /* 清空并关闭 */
