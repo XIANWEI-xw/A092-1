@@ -1092,158 +1092,156 @@
         return rawTime;
     }
 
-    var _cachedMaskData = null;
-    var _cachedEntAvatar = {};
-
-    function _getMaskData() {
-        try { return JSON.parse(localStorage.getItem('ca-user-masks') || '[]'); } catch(e) { return []; }
-    }
-
-    function _buildSingleRow(m, realIdx, isHistory) {
-        var openEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:rgba(21,21,21,0.6);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
-        var closedEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#A63426;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"></path></svg>';
-
-        if (m.role === 'info') {
-            if (m.ai_visible === undefined) m.ai_visible = true;
-            var infoEl = document.createElement('div');
-            infoEl.style.cssText = 'display:flex;justify-content:center;margin:16px 0;width:100%;';
-            infoEl.innerHTML = '<div style="background:rgba(21,21,21,0.03);border:1px solid rgba(21,21,21,0.06);border-radius:12px;padding:6px 12px;display:flex;align-items:center;gap:12px;max-width:85%;box-shadow:0 2px 8px rgba(0,0,0,0.02);"><div style="font-size:10px;color:rgba(21,21,21,0.5);font-weight:600;line-height:1.4;letter-spacing:0.3px;">' + escapeHtml(m.text) + '</div><div class="sys-eye-btn" style="cursor:pointer;padding:2px;transition:all 0.2s;display:flex;align-items:center;justify-content:center;">' + (m.ai_visible ? openEye : closedEye) + '</div></div>';
-            var eyeBtn = infoEl.querySelector('.sys-eye-btn');
-            (function(msg, btn) {
-                btn.addEventListener('click', function() {
-                    msg.ai_visible = !msg.ai_visible;
-                    saveOneConversation(currentChatId);
-                    btn.innerHTML = msg.ai_visible ? openEye : closedEye;
-                });
-            })(m, eyeBtn);
-            return [infoEl];
-        }
-
-        var isSent = m.role === 'user';
-        var type = isSent ? 'sent' : 'received';
-        var storedTime = m.time ? (m.time.split(' ')[1] || m.time) : '';
-        var timeStr = formatStoredTime(storedTime);
-        var rawText = isSent ? stripSysTime(m.text || '') : (m.text || '');
-        var results = [];
-
-        var segs;
-        if (!isSent && rawText.indexOf('\n') !== -1) {
-            segs = rawText.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
-        } else {
-            segs = [rawText];
-        }
-
-        var masks = _getMaskData();
-        var activeMask = masks.find(function(x) { return x.active; });
-        var userInitial = activeMask && activeMask.name ? getInitial(activeMask.name) : 'U';
-        var avInnerMe = activeMask && activeMask.avatar
-            ? '<img src="' + activeMask.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
-            : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#151515;color:#fff;font-size:14px;font-weight:700;">' + userInitial + '</div>';
-        var meAvatarDOM = '<div class="msg-avatar">' + avInnerMe + '</div>';
-
-        var entAvatarDOM = '';
-        var ent = entities.find(function(e) { return e.id === currentChatId; });
-        if (ent) {
-            var dispName = ent.nickname || ent.name;
-            var avInner = ent.avatar
-                ? '<img src="' + ent.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
-                : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:' + ent.color + ';color:#fff;font-size:14px;font-weight:700;">' + window.getInitial(dispName) + '</div>';
-            entAvatarDOM = '<div class="msg-avatar">' + avInner + '</div>';
-        }
-
-        segs.forEach(function(seg, segIdx) {
-            var row = document.createElement('div');
-            row.className = 'msg-row ' + (isSent ? 'row-sent' : 'row-received');
-            if (isHistory) row.classList.add('no-anim');
-
-            var metaHtml = makeMetaHtml(type, isSent ? 'READ' : '', timeStr);
-            var mainText = seg;
-            var transText = '';
-            if (seg.indexOf('|||TRANS|||') !== -1) {
-                var pts = seg.split('|||TRANS|||');
-                mainText = pts[0].trim();
-                transText = pts[1] ? pts[1].trim() : '';
+    function buildMsgFragment(msgs, startIdx) {
+        var fragment = document.createDocumentFragment();
+        msgs.forEach(function(m, vIdx) {
+            var realIdx = startIdx + vIdx;
+            if (m.role === 'info') {
+                if (m.ai_visible === undefined) m.ai_visible = true;
+                var infoEl = document.createElement('div');
+                infoEl.style.cssText = 'display:flex; justify-content:center; margin: 16px 0; width:100%;';
+                var openEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:rgba(21,21,21,0.6);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+                var closedEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#A63426;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"></path></svg>';
+                infoEl.innerHTML = '<div style="background:rgba(21,21,21,0.03); border:1px solid rgba(21,21,21,0.06); border-radius:12px; padding:6px 12px; display:flex; align-items:center; gap:12px; max-width:85%; box-shadow:0 2px 8px rgba(0,0,0,0.02);"><div style="font-size:10px; color:rgba(21,21,21,0.5); font-weight:600; line-height:1.4; letter-spacing:0.3px;">' + escapeHtml(m.text) + '</div><div class="sys-eye-btn" style="cursor:pointer; padding:2px; transition:all 0.2s; display:flex; align-items:center; justify-content:center;" title="Toggle AI Visibility">' + (m.ai_visible ? openEye : closedEye) + '</div></div>';
+                var eyeBtn = infoEl.querySelector('.sys-eye-btn');
+                eyeBtn.addEventListener('click', function() { m.ai_visible = !m.ai_visible; saveOneConversation(currentChatId); eyeBtn.innerHTML = m.ai_visible ? openEye : closedEye; });
+                fragment.appendChild(infoEl);
+                return;
             }
-            var mainHtml = escapeHtml(mainText);
-            var transHtml = transText ? escapeHtml(transText) : '';
-            var bubbleHtml = '';
-            if (transHtml && transConfig.style !== 'off') {
-                var tClass = 'style-' + transConfig.style;
-                var tInner = '';
-                if (transConfig.style === 'seamless') tInner = '<div class="trans-content">' + transHtml + '</div>';
-                else if (transConfig.style === 'obsidian') tInner = '<div class="trans-block">' + transHtml + '</div>';
-                else if (transConfig.style === 'editorial') tInner = '<div class="trans-editorial">' + transHtml + '</div>';
-                row.classList.add('has-trans', tClass);
-                bubbleHtml = '<div class="msg-text">' + mainHtml + '</div><div class="expand-wrapper"><div class="expand-inner">' + tInner + '</div></div>';
+            var isSent = m.role === 'user';
+            var type = isSent ? 'sent' : 'received';
+            var storedTime = m.time.split(' ')[1] || m.time;
+            var timeStr = formatStoredTime(storedTime);
+            var rawText = isSent ? stripSysTime(m.text) : m.text;
+            if (!isSent && rawText.indexOf('\n') !== -1) {
+                var segments = rawText.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+                segments.forEach(function(seg, segIdx) {
+                    var r = cdBuildRow(seg, type, timeStr, '', false);
+                    r.dataset.msgIndex = String(realIdx);
+                    r.dataset.segIndex = String(segIdx);
+                    r.dataset.segTotal = String(segments.length);
+                    fragment.appendChild(r);
+                });
             } else {
-                bubbleHtml = mainHtml;
+                var r = cdBuildRow(rawText, type, timeStr, isSent ? 'READ' : '', false);
+                if (isSent) { var metaEl = r.querySelector('.msg-meta'); if (metaEl) metaEl.innerHTML = makeMetaHtml('sent', 'READ', timeStr); }
+                r.dataset.msgIndex = String(realIdx);
+                r.dataset.segIndex = '0';
+                r.dataset.segTotal = '1';
+                fragment.appendChild(r);
             }
-
-            var avatarDOM = isSent ? meAvatarDOM : entAvatarDOM;
-            var contentHtml = '<div class="msg-content-wrap">' + avatarDOM + '<div class="bubble">' + bubbleHtml + '</div></div>';
-            row.innerHTML = '<div class="msg-checkbox"></div>' + contentHtml + '<div class="msg-meta">' + metaHtml + '</div>';
-
-            if (isSent) {
-                var metaEl = row.querySelector('.msg-meta');
-                if (metaEl) metaEl.innerHTML = makeMetaHtml('sent', 'READ', timeStr);
-            }
-
-            (function(r) {
-                var bEl = r.querySelector('.bubble');
-                if (!bEl) return;
-                bEl.style.position = 'relative';
-                var dustEl = document.createElement('div');
-                dustEl.className = 'lp-wd-dust';
-                dustEl.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
-                bEl.appendChild(dustEl);
-                var starBadge = document.createElement('div');
-                starBadge.className = 'lp-star-badge';
-                starBadge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
-                bEl.appendChild(starBadge);
-                var metaTag = document.createElement('div');
-                metaTag.className = 'lp-bubble-meta';
-                metaTag.textContent = 'MSG_' + String(Math.floor(Math.random() * 9000) + 1000);
-                bEl.appendChild(metaTag);
-            })(row);
-
-            if (transText && transConfig.style !== 'off') {
-                var bubbleEl = row.querySelector('.bubble');
-                bubbleEl.style.cursor = 'pointer';
-                bubbleEl.addEventListener('click', function() {
-                    if (!document.getElementById('caChatDetail').classList.contains('multi-mode')) {
-                        row.classList.toggle('trans-active');
-                    }
-                });
-            }
-
-            row.dataset.msgIndex = String(realIdx);
-            row.dataset.segIndex = String(segIdx);
-            row.dataset.segTotal = String(segs.length);
-            results.push(row);
         });
-
-        return results;
+        return fragment;
     }
 
-    function _updateGrouping(rows) {
-        var prevType = null;
-        var prevRow = null;
+    function cdBuildRow(text, type, timeStr, statusText, animate) {
+        var row = document.createElement('div');
+        row.className = 'msg-row ' + (type === 'sent' ? 'row-sent' : 'row-received');
+        row.classList.add('no-anim');
+
+        var metaHtml = makeMetaHtml(type, statusText, timeStr);
+
+        var mainText = text;
+        var transText = '';
+        if (text.indexOf('|||TRANS|||') !== -1) {
+            var parts = text.split('|||TRANS|||');
+            mainText = parts[0].trim();
+            transText = parts[1] ? parts[1].trim() : '';
+        }
+        var mainHtml = escapeHtml(mainText);
+        var transHtml = transText ? escapeHtml(transText) : '';
+
+        var bubbleHtml = '';
+        if (transHtml && transConfig.style !== 'off') {
+            var transClass = 'style-' + transConfig.style;
+            var transInner = '';
+            if (transConfig.style === 'seamless') transInner = '<div class="trans-content">' + transHtml + '</div>';
+            else if (transConfig.style === 'obsidian') transInner = '<div class="trans-block">' + transHtml + '</div>';
+            else if (transConfig.style === 'editorial') transInner = '<div class="trans-editorial">' + transHtml + '</div>';
+            row.classList.add('has-trans', transClass);
+            bubbleHtml = '<div class="msg-text">' + mainHtml + '</div><div class="expand-wrapper"><div class="expand-inner">' + transInner + '</div></div>';
+        } else {
+            bubbleHtml = mainHtml;
+        }
+
+        var avatarDOM = '';
+        if (type === 'received') {
+            var ent = entities.find(function(e) { return e.id === currentChatId; });
+            if (ent) {
+                var dispName = ent.nickname || ent.name;
+                var avInner = ent.avatar
+                    ? '<img src="' + ent.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
+                    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:' + ent.color + ';color:#fff;font-size:14px;font-weight:700;">' + window.getInitial(dispName) + '</div>';
+                avatarDOM = '<div class="msg-avatar">' + avInner + '</div>';
+            }
+        } else {
+            var userInitial = 'U';
+            var masks = [];
+            try { masks = JSON.parse(localStorage.getItem('ca-user-masks') || '[]'); } catch(e){}
+            var activeMask = masks.find(function(m) { return m.active; });
+            if (activeMask && activeMask.name) userInitial = getInitial(activeMask.name);
+            var avInnerMe = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#151515;color:#fff;font-size:14px;font-weight:700;">' + userInitial + '</div>';
+            if (activeMask && activeMask.avatar) {
+                avInnerMe = '<img src="' + activeMask.avatar + '" style="width:100%;height:100%;object-fit:cover;">';
+            }
+            avatarDOM = '<div class="msg-avatar">' + avInnerMe + '</div>';
+        }
+
+        var contentHtml = '<div class="msg-content-wrap">' + avatarDOM + '<div class="bubble">' + bubbleHtml + '</div></div>';
+        row.innerHTML = '<div class="msg-checkbox"></div>' + contentHtml + '<div class="msg-meta">' + metaHtml + '</div>';
+
+        (function() {
+            var bEl = row.querySelector('.bubble');
+            if (!bEl) return;
+            bEl.style.position = 'relative';
+            var dustEl = document.createElement('div');
+            dustEl.className = 'lp-wd-dust';
+            dustEl.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
+            bEl.appendChild(dustEl);
+            var starBadge = document.createElement('div');
+            starBadge.className = 'lp-star-badge';
+            starBadge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+            bEl.appendChild(starBadge);
+            var metaTag = document.createElement('div');
+            metaTag.className = 'lp-bubble-meta';
+            metaTag.textContent = 'MSG_' + String(Math.floor(Math.random() * 9000) + 1000);
+            bEl.appendChild(metaTag);
+        })();
+
+        if (transText && transConfig.style !== 'off') {
+            var bubbleEl = row.querySelector('.bubble');
+            bubbleEl.style.cursor = 'pointer';
+            bubbleEl.addEventListener('click', function(e) {
+                if (!document.getElementById('caChatDetail').classList.contains('multi-mode')) {
+                    row.classList.toggle('trans-active');
+                }
+            });
+        }
+
+        return row;
+    }
+
+    function updateMsgGrouping() {
+        var area = document.getElementById('cdChatArea');
+        if (!area) return;
+        var rows = Array.from(area.querySelectorAll('.msg-row:not(.sys-msg)'));
+        var lastType = null;
+        var lastRow = null;
         rows.forEach(function(row) {
             var isSent = row.classList.contains('row-sent');
-            var isReceived = row.classList.contains('row-received');
-            if (!isSent && !isReceived) return;
             var curType = isSent ? 'sent' : 'received';
-            if (curType === prevType && prevRow) {
-                prevRow.classList.add('grouped');
+            if (lastType === curType && lastRow) {
+                lastRow.classList.add('grouped');
             }
-            prevType = curType;
-            prevRow = row;
+            lastType = curType;
+            lastRow = row;
         });
+        cdLastMsgType = lastType;
+        cdLastMsgRow = lastRow;
     }
 
     function renderConvToDOM(msgs, isLoadMore) {
         var area = document.getElementById('cdChatArea');
-        if (!area) return;
         var allMsgs = msgs || [];
         var currentLimit = cdDisplayLimit || 18;
         var startIdx = Math.max(0, allMsgs.length - currentLimit);
@@ -1253,41 +1251,67 @@
         var oldScrollTop = area.scrollTop;
 
         area.style.display = 'none';
-        area.style.scrollBehavior = 'auto';
         area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
-
-        var frag = document.createDocumentFragment();
+        cdLastMsgType = null;
+        cdLastMsgRow = null;
 
         if (startIdx > 0) {
             var loadHint = document.createElement('div');
             loadHint.className = 'cd-load-hint';
             loadHint.id = 'cdLoadSentinel';
             loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
-            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE</div><div class="lh-line"></div>';
-            frag.appendChild(loadHint);
+            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(startIdx / 18) + '</div><div class="lh-line"></div>';
+            area.appendChild(loadHint);
         }
 
         var sysEl = document.createElement('div');
         sysEl.className = 'sys-msg';
         var ent = entities.find(function(e) { return e.id === currentChatId; });
         sysEl.textContent = 'Conversation with ' + (ent ? ent.name : '');
-        frag.appendChild(sysEl);
+        area.appendChild(sysEl);
 
-        var allRows = [];
         visibleMsgs.forEach(function(m, vIdx) {
             var realIdx = startIdx + vIdx;
-            var rows = _buildSingleRow(m, realIdx, true);
-            rows.forEach(function(row) {
-                frag.appendChild(row);
-                allRows.push(row);
-            });
+            if (m.role === 'info') {
+                if (m.ai_visible === undefined) m.ai_visible = true;
+                var infoEl = document.createElement('div');
+                infoEl.style.cssText = 'display:flex; justify-content:center; margin: 16px 0; width:100%;';
+                var openEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:rgba(21,21,21,0.6);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+                var closedEye = '<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#A63426;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"></path></svg>';
+                infoEl.innerHTML = '<div style="background:rgba(21,21,21,0.03); border:1px solid rgba(21,21,21,0.06); border-radius:12px; padding:6px 12px; display:flex; align-items:center; gap:12px; max-width:85%; box-shadow:0 2px 8px rgba(0,0,0,0.02);"><div style="font-size:10px; color:rgba(21,21,21,0.5); font-weight:600; line-height:1.4; letter-spacing:0.3px;">' + escapeHtml(m.text) + '</div><div class="sys-eye-btn" style="cursor:pointer; padding:2px; transition:all 0.2s; display:flex; align-items:center; justify-content:center;" title="Toggle AI Visibility">' + (m.ai_visible ? openEye : closedEye) + '</div></div>';
+                var eyeBtn = infoEl.querySelector('.sys-eye-btn');
+                eyeBtn.addEventListener('click', function() { m.ai_visible = !m.ai_visible; saveOneConversation(currentChatId); eyeBtn.innerHTML = m.ai_visible ? openEye : closedEye; });
+                area.appendChild(infoEl);
+                return;
+            }
+            var isSent = m.role === 'user';
+            var type = isSent ? 'sent' : 'received';
+            var storedTime = m.time.split(' ')[1] || m.time;
+            var timeStr = formatStoredTime(storedTime);
+            var rawText = isSent ? stripSysTime(m.text) : m.text;
+            if (!isSent && rawText.indexOf('\n') !== -1) {
+                var segments = rawText.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+                segments.forEach(function(seg, segIdx) {
+                    var r = cdBuildRow(seg, type, timeStr, '', false);
+                    r.dataset.msgIndex = String(realIdx);
+                    r.dataset.segIndex = String(segIdx);
+                    r.dataset.segTotal = String(segments.length);
+                    area.appendChild(r);
+                });
+            } else {
+                var r = cdBuildRow(rawText, type, timeStr, isSent ? 'READ' : '', false);
+                if (isSent) { var metaEl = r.querySelector('.msg-meta'); if (metaEl) metaEl.innerHTML = makeMetaHtml('sent', 'READ', timeStr); }
+                r.dataset.msgIndex = String(realIdx);
+                r.dataset.segIndex = '0';
+                r.dataset.segTotal = '1';
+                area.appendChild(r);
+            }
         });
 
-        area.appendChild(frag);
-
-        _updateGrouping(allRows);
+        updateMsgGrouping();
 
         area.style.display = 'flex';
+        area.style.scrollBehavior = 'auto';
 
         if (isLoadMore) {
             area.scrollTop = area.scrollHeight - oldScrollHeight + oldScrollTop;
@@ -1300,31 +1324,21 @@
             isMessagesLoading = false;
         }, 50);
 
+        if (typeof bindAllBubbles === 'function') bindAllBubbles();
+
         var sentinel = document.getElementById('cdLoadSentinel');
-        if (sentinel) {
-            var fn = function(e) {
-                if (e) e.stopPropagation();
-                if (isMessagesLoading) return;
-                var m2 = conversations[currentChatId] || [];
-                if (cdDisplayLimit < m2.length) {
-                    isMessagesLoading = true;
-                    sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
-                    cdDisplayLimit += 18;
-                    renderConvToDOM(conversations[currentChatId], true);
-                }
-            };
-            sentinel.onclick = fn;
-            sentinel.ontouchend = fn;
-        }
+        if (sentinel) bindSentinel(sentinel);
 
         if (!area.dataset.scrollBoundLoad) {
             area.addEventListener('scroll', function() {
                 if (area.scrollTop < 80 && !isMessagesLoading && currentChatId) {
-                    var m3 = conversations[currentChatId] || [];
-                    if (cdDisplayLimit < m3.length) {
+                    var msgs2 = conversations[currentChatId] || [];
+                    if (cdDisplayLimit < msgs2.length) {
                         isMessagesLoading = true;
                         var hint = document.getElementById('cdLoadSentinel');
-                        if (hint) hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
+                        if (hint) {
+                            hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
+                        }
                         cdDisplayLimit += 18;
                         renderConvToDOM(conversations[currentChatId], true);
                     }
@@ -1336,35 +1350,18 @@
 
     function bindSentinel(el) {
         var fn = function(e) {
-            if (e) e.stopPropagation();
+            e.stopPropagation();
             if (isMessagesLoading) return;
             var msgs = conversations[currentChatId] || [];
             if (cdDisplayLimit < msgs.length) {
                 isMessagesLoading = true;
                 el.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
                 cdDisplayLimit += 18;
-                renderConvToDOM(conversations[currentChatId], true);
+                renderMessages(currentChatId, true);
             }
         };
         el.onclick = fn;
         el.ontouchend = fn;
-    }
-
-    function cdBuildMsgEl(text, type, timeStr, statusText, noAnim) {
-        var rows = _buildSingleRow(
-            {
-                role: type === 'sent' ? 'user' : 'assistant',
-                text: text,
-                time: timeStr
-            },
-            -1,
-            noAnim
-        );
-        return rows[0] || document.createElement('div');
-    }
-
-    function buildMsgRow(m, realIdx, isBatch) {
-        return _buildSingleRow(m, realIdx, isBatch);
     }
 
     var transConfig = JSON.parse(localStorage.getItem('ca-trans-config') || '{"style":"off","myLang":"Auto","transLang":"Chinese"}');
@@ -1377,7 +1374,12 @@
     }
 
     function cdAddMsg(area, text, type, timeStr, statusText, animate, isBatch) {
-        var row = cdBuildMsgEl(text, type, timeStr, statusText, !animate);
+        var row = document.createElement('div');
+        row.className = 'msg-row ' + (type === 'sent' ? 'row-sent' : 'row-received');
+
+        if (!animate) {
+            row.classList.add('no-anim');
+        }
 
         if (cdLastMsgType === type && cdLastMsgRow) {
             cdLastMsgRow.classList.add('grouped');
@@ -1385,12 +1387,97 @@
         cdLastMsgType = type;
         cdLastMsgRow = row;
 
+        var metaHtml = makeMetaHtml(type, statusText, timeStr);
+
+        var mainText = text;
+        var transText = '';
+        if (text.indexOf('|||TRANS|||') !== -1) {
+            var parts = text.split('|||TRANS|||');
+            mainText = parts[0].trim();
+            transText = parts[1] ? parts[1].trim() : '';
+        }
+        var mainHtml = escapeHtml(mainText);
+        var transHtml = transText ? escapeHtml(transText) : '';
+
+        var bubbleHtml = '';
+        if (transHtml && transConfig.style !== 'off') {
+            var transClass = 'style-' + transConfig.style;
+            var transInner = '';
+            if (transConfig.style === 'seamless') transInner = '<div class="trans-content">' + transHtml + '</div>';
+            else if (transConfig.style === 'obsidian') transInner = '<div class="trans-block">' + transHtml + '</div>';
+            else if (transConfig.style === 'editorial') transInner = '<div class="trans-editorial">' + transHtml + '</div>';
+
+            row.classList.add('has-trans', transClass);
+            bubbleHtml = '<div class="msg-text">' + mainHtml + '</div><div class="expand-wrapper"><div class="expand-inner">' + transInner + '</div></div>';
+        } else {
+            bubbleHtml = mainHtml;
+        }
+
+        var avatarDOM = '';
+        if (type === 'received') {
+            var ent = entities.find(function(e) { return e.id === currentChatId; });
+            if (ent) {
+                var dispName = ent.nickname || ent.name;
+                var avInner = ent.avatar
+                    ? '<img src="' + ent.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
+                    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:' + ent.color + ';color:#fff;font-size:14px;font-weight:700;">' + window.getInitial(dispName) + '</div>';
+                avatarDOM = '<div class="msg-avatar">' + avInner + '</div>';
+            }
+        } else {
+            var userInitial = 'U';
+            var masks = [];
+            try { masks = JSON.parse(localStorage.getItem('ca-user-masks') || '[]'); } catch(e){}
+            var activeMask = masks.find(function(m) { return m.active; });
+            if (activeMask && activeMask.name) userInitial = getInitial(activeMask.name);
+
+            var avInnerMe = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#151515;color:#fff;font-size:14px;font-weight:700;">' + userInitial + '</div>';
+            if (activeMask && activeMask.avatar) {
+                avInnerMe = '<img src="' + activeMask.avatar + '" style="width:100%;height:100%;object-fit:cover;">';
+            }
+            avatarDOM = '<div class="msg-avatar">' + avInnerMe + '</div>';
+        }
+        var contentHtml = '<div class="msg-content-wrap">' + avatarDOM + '<div class="bubble">' + bubbleHtml + '</div></div>';
+
+        row.innerHTML = '<div class="msg-checkbox"></div>' + contentHtml + '<div class="msg-meta">' + metaHtml + '</div>';
+
+        /* 注入 Weight Drop 所需的粉尘、星标、meta */
+        (function() {
+            var bEl = row.querySelector('.bubble');
+            if (!bEl) return;
+            bEl.style.position = 'relative';
+
+            var dustEl = document.createElement('div');
+            dustEl.className = 'lp-wd-dust';
+            dustEl.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
+            bEl.appendChild(dustEl);
+
+            var starBadge = document.createElement('div');
+            starBadge.className = 'lp-star-badge';
+            starBadge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+            bEl.appendChild(starBadge);
+
+            var metaTag = document.createElement('div');
+            metaTag.className = 'lp-bubble-meta';
+            metaTag.textContent = 'MSG_' + String(Math.floor(Math.random() * 9000) + 1000);
+            bEl.appendChild(metaTag);
+        })();
+
+        if (transText && transConfig.style !== 'off') {
+            var bubbleEl = row.querySelector('.bubble');
+            bubbleEl.style.cursor = 'pointer';
+            bubbleEl.addEventListener('click', function(e) {
+                if (!document.getElementById('caChatDetail').classList.contains('multi-mode')) {
+                    row.classList.toggle('trans-active');
+                }
+            });
+        }
+
         area.appendChild(row);
 
         if (!isBatch) {
-            setTimeout(function() {
-                var a = document.getElementById('cdChatArea');
-                if (a) a.scrollTop = a.scrollHeight;
+            updateMsgGrouping();
+            setTimeout(function () {
+                if (area.nodeType === 1) area.scrollTop = area.scrollHeight;
             }, 10);
             if (typeof checkAutoSum === 'function') checkAutoSum();
         }
@@ -2436,7 +2523,7 @@
                     saveOneConversation(_ent.id);
                     
                     if (currentChatId === _ent.id) {
-                        renderConvToDOM(conversations[_ent.id] || [], false);
+                        renderMessages(_ent.id);
                     }
                     renderChats();
                     
@@ -3090,7 +3177,7 @@
                 transConfig.style = this.dataset.style;
                 saveTransConfig();
                 updateTransUI();
-                if (currentChatId) renderConvToDOM(conversations[currentChatId] || [], false);
+                if (currentChatId) renderMessages(currentChatId);
             });
         });
 
@@ -3438,7 +3525,7 @@
 
                 conversations[currentChatId] = [];
                 saveOneConversation(currentChatId);
-                renderConvToDOM(conversations[currentChatId] || [], false);
+                renderMessages(currentChatId);
 
                 setTimeout(() => {
                     flash.style.opacity = '1';
@@ -3781,7 +3868,7 @@
                     msgs[index].text = newText;
                     saveOneConversation(chatId);
                     closeContextMenu();
-                    renderConvToDOM(conversations[chatId] || [], false);
+                    renderMessages(chatId);
                 } else {
                     closeContextMenu();
                 }
@@ -3946,7 +4033,7 @@
                     
                     conversations[chatId] = msgs.slice(0, index + 1);
                     saveOneConversation(chatId);
-                    renderConvToDOM(conversations[chatId] || [], false);
+                    renderMessages(chatId);
                     
                     requestAnimationFrame(function () {
                         var area2 = document.getElementById('cdChatArea');
@@ -3971,7 +4058,7 @@
                     conversations[chatId] = msgs.slice(0, searchIdx + 1);
                     saveOneConversation(chatId);
                     closeContextMenu();
-                    renderConvToDOM(conversations[chatId] || [], false);
+                    renderMessages(chatId);
 
                     /* 立即同步全局打字状态，确保退出界面后列表显示正确 */
                     typingStateMap[chatId] = true;
@@ -4264,7 +4351,7 @@
                     msDelHint.classList.remove('show');
 
                     cdDisplayLimit = 18;
-                    renderConvToDOM(conversations[currentChatId] || [], false);
+                    renderMessages(currentChatId);
                     renderChats();
                 }, 380);
             }
@@ -5137,7 +5224,7 @@
                 if (confirm('Clear all messages?')) {
                     conversations[currentChatId] = [];
                     saveOneConversation(currentChatId);
-                    renderConvToDOM(conversations[currentChatId] || [], false);
+                    renderMessages(currentChatId);
                     overlay.classList.remove('active');
                 }
             });
