@@ -1399,9 +1399,7 @@
         } else {
             cdLastMsgType = null;
             cdLastMsgRow = null;
-            var frag = document.createDocumentFragment();
-            var tempMask = document.createElement('div'); tempMask.className = 'chat-mask'; tempMask.id = 'cdChatMask'; frag.appendChild(tempMask);
-            var tempOverlay = document.createElement('div'); tempOverlay.className = 'lp-overlay'; tempOverlay.id = 'cdLpOverlay'; frag.appendChild(tempOverlay);
+            area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
 
             if (startIdx > 0) {
                 var loadHint2 = document.createElement('div');
@@ -1456,8 +1454,6 @@
                 }
             });
 
-            area.innerHTML = '';
-            area.appendChild(frag);
             updateMsgGrouping();
 
             area.style.scrollBehavior = 'auto';
