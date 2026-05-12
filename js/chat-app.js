@@ -1242,6 +1242,7 @@
 
     function renderConvToDOM(msgs, isLoadMore) {
         var area = document.getElementById('cdChatArea');
+        if (!area) return;
         var allMsgs = msgs || [];
         var currentLimit = cdDisplayLimit || 18;
         var startIdx = Math.max(0, allMsgs.length - currentLimit);
@@ -1334,7 +1335,8 @@
             if (sentinel) bindSentinel(sentinel);
 
         } else {
-            area.style.display = 'none';
+            area.style.visibility = 'hidden';
+            area.style.pointerEvents = 'none';
             area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
             cdLastMsgType = null;
             cdLastMsgRow = null;
@@ -1394,7 +1396,8 @@
 
             updateMsgGrouping();
 
-            area.style.display = 'flex';
+            area.style.visibility = '';
+            area.style.pointerEvents = '';
             area.style.scrollBehavior = 'auto';
             area.scrollTop = area.scrollHeight;
 
