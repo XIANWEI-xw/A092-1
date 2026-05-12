@@ -370,9 +370,10 @@
             '#lensApp .heat-bar-bg{width:100%;height:4px;background:var(--lk-gbss);border-radius:2px;overflow:hidden;-webkit-transform:translateZ(0);transform:translateZ(0)}' +
             '#lensApp .heat-bar-fill{height:100%;width:0%;border-radius:2px;transition:width .8s cubic-bezier(.16,1,.3,1),background .8s,box-shadow .8s;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:width}' +
 
-            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;will-change:transform,scroll-position;-webkit-transform:translateZ(0);transform:translateZ(0);contain:strict;}' +
+            '#lensApp .chat-scroll{flex:1;overflow-y:auto;padding:8px 0 170px;scrollbar-width:none;-webkit-overflow-scrolling:touch;will-change:transform,scroll-position;-webkit-transform:translateZ(0);transform:translateZ(0);contain:strict;}' +
             '#lensApp .chat-scroll::-webkit-scrollbar{display:none}' +
-            '#lensApp .msg-row{animation:lk-fadeIn .3s ease-out forwards;opacity:0;contain:layout style paint;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;isolation:isolate}' +
+            '#lensApp .msg-row{contain:layout style paint;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-transform:translateZ(0);transform:translateZ(0);will-change:transform;isolation:isolate}' +
+            '#lensApp .msg-row.lk-new{animation:lk-fadeIn .3s ease-out forwards;opacity:0;}' +
             '@keyframes lk-fadeIn{to{opacity:1}}' +
             '@keyframes lk-msg-dissolve{' +
                 '0%{opacity:1;-webkit-transform:translateZ(0) translateY(0) scale(1);transform:translateZ(0) translateY(0) scale(1);filter:blur(0px)}' +
@@ -1013,29 +1014,51 @@
             return;
         }
 
-        var frag = document.createDocumentFragment();
-
         if (startIdx > 0) {
             var loadBtn = document.createElement('div');
             loadBtn.id = 'lensLoadMore';
             loadBtn.style.cssText = 'text-align:center;padding:20px 0 10px;font-family:\'Syncopate\',sans-serif;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.25);cursor:pointer;user-select:none;';
             loadBtn.textContent = '\u2014 LOAD MORE \u2014';
-            frag.appendChild(loadBtn);
+            container.insertBefore(loadBtn, typing);
         }
 
-        var msgFrag = buildLensMsgFragment(visible, startIdx);
-        frag.appendChild(msgFrag);
-        container.insertBefore(frag, typing);
+        visible.forEach(function(m, vIdx) {
+            var realIdx = startIdx + vIdx;
+            var d = document.createElement('div');
+            if (m.role === 'user' && m.isDirector) {
+                d.className = 'msg-row msg-director';
+                d.dataset.msgIdx = realIdx;
+                d.dataset.msgRole = 'director';
+                var html = '<div class="director-card"><div class="dir-header">DIRECTOR OVERRIDE</div>';
+                if (m.scene) html += '<div class="dir-section"><span class="dir-label">SCENE</span><div class="dir-scene-text">' + esc(m.scene) + '</div></div>';
+                if (m.dlg) html += '<div class="dir-section"><span class="dir-label">DIALOGUE</span><div class="dir-dlg-text">\u201C' + esc(m.dlg) + '\u201D</div></div>';
+                html += '</div>';
+                d.innerHTML = html;
+            } else if (m.role === 'user') {
+                d.className = 'msg-row msg-user';
+                d.dataset.msgIdx = realIdx;
+                d.dataset.msgRole = 'user';
+                d.innerHTML = '<div class="user-text">' + esc(m.text) + '</div>';
+            } else {
+                d.className = 'msg-row msg-ai';
+                d.dataset.msgIdx = realIdx;
+                d.dataset.msgRole = 'assistant';
+                d.innerHTML = parseNarr(m.text);
+            }
+            container.insertBefore(d, typing);
+        });
 
+        container.style.scrollBehavior = 'auto';
         container.style.display = '';
 
         if (isLoadMore) {
             container.scrollTop = container.scrollHeight - oldScrollHeight + oldScrollTop;
         } else {
-            scrollBot();
+            container.scrollTop = container.scrollHeight;
         }
 
         setTimeout(function() {
+            container.style.scrollBehavior = '';
             isLensMessagesLoading = false;
         }, 50);
 
@@ -1230,8 +1253,13 @@
     }
 
     function scrollBot() {
-        var a = document.getElementById('lensAnchor');
-        if (a) a.scrollIntoView({ behavior: 'smooth' });
+        var container = document.getElementById('lensChatContainer');
+        if (!container) return;
+        container.style.scrollBehavior = 'auto';
+        container.scrollTop = container.scrollHeight;
+        setTimeout(function() {
+            container.style.scrollBehavior = '';
+        }, 50);
     }
 
     function bindContainerDelegate() {
@@ -1246,7 +1274,7 @@
 
     function addAIMsg(text, idx, fragment) {
         var d = document.createElement('div');
-        d.className = 'msg-row msg-ai';
+        d.className = 'msg-row msg-ai lk-new';
         d.dataset.msgIdx = (idx !== undefined) ? idx : '';
         d.dataset.msgRole = 'assistant';
         d.innerHTML = parseNarr(text);
@@ -1262,7 +1290,7 @@
 
     function addUserMsg(text, idx, fragment) {
         var d = document.createElement('div');
-        d.className = 'msg-row msg-user';
+        d.className = 'msg-row msg-user lk-new';
         d.dataset.msgIdx = (idx !== undefined) ? idx : '';
         d.dataset.msgRole = 'user';
         d.innerHTML = '<div class="user-text">' + esc(text) + '</div>';
@@ -1278,7 +1306,7 @@
 
     function addDirectorMsg(scene, dlg, idx, fragment) {
         var d = document.createElement('div');
-        d.className = 'msg-row msg-director';
+        d.className = 'msg-row msg-director lk-new';
         d.dataset.msgIdx = (idx !== undefined) ? idx : '';
         d.dataset.msgRole = 'director';
         var html = '<div class="director-card"><div class="dir-header">DIRECTOR OVERRIDE</div>';

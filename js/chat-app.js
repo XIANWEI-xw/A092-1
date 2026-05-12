@@ -1364,6 +1364,12 @@
         el.ontouchend = fn;
     }
 
+    function renderMessages(entId, isLoadMore) {
+        if (!entId) return;
+        cdDisplayLimit = cdDisplayLimit || 18;
+        renderConvToDOM(conversations[entId] || [], isLoadMore || false);
+    }
+
     var transConfig = JSON.parse(localStorage.getItem('ca-trans-config') || '{"style":"off","myLang":"Auto","transLang":"Chinese"}');
     function saveTransConfig() { localStorage.setItem('ca-trans-config', JSON.stringify(transConfig)); }
 
