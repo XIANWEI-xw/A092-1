@@ -1359,8 +1359,6 @@
         if (isLoadMore) {
             var existingSentinel = document.getElementById('cdLoadSentinel');
             if (existingSentinel) existingSentinel.remove();
-            var existingSys = area.querySelector('.sys-msg');
-            if (existingSys) existingSys.remove();
 
             var fragment = document.createDocumentFragment();
 
@@ -1373,13 +1371,6 @@
                 fragment.appendChild(loadHint);
             }
 
-            var newSysEl = document.createElement('div');
-            newSysEl.className = 'sys-msg';
-            var entForSys = entities.find(function(e) { return e.id === currentChatId; });
-            newSysEl.textContent = 'Conversation with ' + (entForSys ? entForSys.name : '');
-            fragment.appendChild(newSysEl);
-
-            var newMsgEls = [];
             visibleMsgs.forEach(function(m, vIdx) {
                 var realIdx = startIdx + vIdx;
                 var alreadyExists = area.querySelector('[data-msg-index="' + realIdx + '"]');
@@ -1425,9 +1416,10 @@
                 }
             });
 
-            var firstMsg = area.querySelector('.msg-row');
-            if (firstMsg) {
-                area.insertBefore(fragment, firstMsg);
+            var sysMsg = area.querySelector('.sys-msg');
+            var insertRef = sysMsg ? sysMsg.nextSibling : area.querySelector('.msg-row');
+            if (insertRef) {
+                area.insertBefore(fragment, insertRef);
             } else {
                 area.appendChild(fragment);
             }
@@ -1528,20 +1520,51 @@
                         var msgs2 = conversations[currentChatId] || [];
                         if (cdDisplayLimit < msgs2.length) {
                             isMessagesLoading = true;
-                            var hint = document.getElementById('cdLoadSentinel');
-                            if (hint) {
-                                hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
-                            }
                             var loadChatId = currentChatId;
-                            a.style.pointerEvents = 'none';
+
+                            var oldScrollHeight = a.scrollHeight;
+                            var oldScrollTop = a.scrollTop;
+
+                            cdDisplayLimit += 18;
+                            var allMsgs = msgs2;
+                            var newStartIdx = Math.max(0, allMsgs.length - cdDisplayLimit);
+                            var oldStartIdx = newStartIdx + 18;
+
+                            var newBatchMsgs = allMsgs.slice(newStartIdx, oldStartIdx);
+                            var fragment = buildMsgFragment(newBatchMsgs, newStartIdx);
+
+                            var oldSentinel = document.getElementById('cdLoadSentinel');
+                            if (oldSentinel) oldSentinel.remove();
+
+                            if (newStartIdx > 0) {
+                                var loadHint = document.createElement('div');
+                                loadHint.className = 'cd-load-hint';
+                                loadHint.id = 'cdLoadSentinel';
+                                loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
+                                loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(newStartIdx / 18) + '</div><div class="lh-line"></div>';
+                                fragment.insertBefore(loadHint, fragment.firstChild);
+                            }
+
+                            var sysMsg = a.querySelector('.sys-msg');
+                            var insertRef = sysMsg ? sysMsg.nextSibling : a.querySelector('.msg-row');
+                            if (insertRef) {
+                                a.insertBefore(fragment, insertRef);
+                            } else {
+                                a.appendChild(fragment);
+                            }
+
+                            a.style.scrollBehavior = 'auto';
+                            a.scrollTop = oldScrollTop + (a.scrollHeight - oldScrollHeight);
+
+                            updateMsgGrouping();
+
+                            var newSentinel = document.getElementById('cdLoadSentinel');
+                            if (newSentinel) bindSentinel(newSentinel);
+
                             setTimeout(function() {
-                                requestAnimationFrame(function() {
-                                    cdDisplayLimit += 18;
-                                    renderConvToDOM(conversations[loadChatId] || [], true);
-                                    var a2 = document.getElementById('cdChatArea');
-                                    if (a2) a2.style.pointerEvents = '';
-                                });
-                            }, 150);
+                                a.style.scrollBehavior = '';
+                                isMessagesLoading = false;
+                            }, 50);
                         }
                     }
                 }, { passive: true });
@@ -1558,11 +1581,52 @@
             var msgs = conversations[currentChatId] || [];
             if (cdDisplayLimit < msgs.length) {
                 isMessagesLoading = true;
-                el.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
+
+                var area = document.getElementById('cdChatArea');
+                if (!area) return;
+
+                var oldScrollHeight = area.scrollHeight;
+                var oldScrollTop = area.scrollTop;
+
+                cdDisplayLimit += 18;
+                var allMsgs = msgs;
+                var newStartIdx = Math.max(0, allMsgs.length - cdDisplayLimit);
+                var oldStartIdx = newStartIdx + 18;
+
+                var newBatchMsgs = allMsgs.slice(newStartIdx, oldStartIdx);
+                var fragment = buildMsgFragment(newBatchMsgs, newStartIdx);
+
+                el.remove();
+
+                if (newStartIdx > 0) {
+                    var loadHint = document.createElement('div');
+                    loadHint.className = 'cd-load-hint';
+                    loadHint.id = 'cdLoadSentinel';
+                    loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
+                    loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(newStartIdx / 18) + '</div><div class="lh-line"></div>';
+                    fragment.insertBefore(loadHint, fragment.firstChild);
+                }
+
+                var sysMsg = area.querySelector('.sys-msg');
+                var insertRef = sysMsg ? sysMsg.nextSibling : area.querySelector('.msg-row');
+                if (insertRef) {
+                    area.insertBefore(fragment, insertRef);
+                } else {
+                    area.appendChild(fragment);
+                }
+
+                area.style.scrollBehavior = 'auto';
+                area.scrollTop = oldScrollTop + (area.scrollHeight - oldScrollHeight);
+
+                updateMsgGrouping();
+
+                var newSentinel = document.getElementById('cdLoadSentinel');
+                if (newSentinel) bindSentinel(newSentinel);
+
                 setTimeout(function() {
-                    cdDisplayLimit += 18;
-                    renderMessages(currentChatId, true);
-                }, 100);
+                    area.style.scrollBehavior = '';
+                    isMessagesLoading = false;
+                }, 50);
             }
         };
         el.onclick = fn;
