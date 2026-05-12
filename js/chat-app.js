@@ -1418,8 +1418,13 @@
                             if (hint) {
                                 hint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
                             }
-                            cdDisplayLimit += 18;
-                            renderConvToDOM(conversations[currentChatId], true);
+                            var loadChatId = currentChatId;
+                            requestAnimationFrame(function() {
+                                requestAnimationFrame(function() {
+                                    cdDisplayLimit += 18;
+                                    renderConvToDOM(conversations[loadChatId] || [], true);
+                                });
+                            });
                         }
                     }
                 }, { passive: true });
@@ -1436,8 +1441,10 @@
             if (cdDisplayLimit < msgs.length) {
                 isMessagesLoading = true;
                 el.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">Loading...</div><div class="lh-line"></div>';
-                cdDisplayLimit += 18;
-                renderMessages(currentChatId, true);
+                setTimeout(function() {
+                    cdDisplayLimit += 18;
+                    renderMessages(currentChatId, true);
+                }, 100);
             }
         };
         el.onclick = fn;
