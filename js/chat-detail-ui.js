@@ -402,7 +402,7 @@
                         '</div>' +
                         '<div class="menu-grid">' +
 
-                            '<div class="menu-item">' +
+                            '<div class="menu-item" id="cdMenuNarration">' +
                                 '<div class="menu-btn">' +
                                     '<svg viewBox="0 0 24 24" fill="none" stroke="#151515" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
                                         '<rect x="9" y="2" width="6" height="11" rx="3"/>' +
@@ -546,6 +546,36 @@
 
                 '</div>' +
             '</div>' +
+
+            /* Director Card (小卡片) */
+            '<div class="director-card-wrap" id="cdDirectorWrap">' +
+                '<div class="director-card" id="cdDirectorCard">' +
+                    '<div class="dc-stripe"></div>' +
+                    '<div class="dc-close" id="cdDirectorClose">' +
+                        '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+                    '</div>' +
+                    '<div class="dc-body">' +
+                        '<div class="dc-wm">Cut</div>' +
+                        '<div class="dc-title">Scene Control</div>' +
+                        '<div class="dc-type-selector" id="cdDcTypeSelector" style="--idx:0;">' +
+                            '<div class="dc-ts-highlight"></div>' +
+                            '<label class="dc-type-label"><input type="radio" name="dcType" value="旁白" checked><span>旁白</span></label>' +
+                            '<label class="dc-type-label"><input type="radio" name="dcType" value="动作"><span>动作</span></label>' +
+                            '<label class="dc-type-label"><input type="radio" name="dcType" value="纠错"><span>纠错</span></label>' +
+                        '</div>' +
+                        '<div class="dc-group">' +
+                            '<label class="dc-label">01. Directive / 指令内容</label>' +
+                            '<textarea class="dc-textarea" id="cdDcDirective" placeholder="Describe the scene, action, or correction..."></textarea>' +
+                        '</div>' +
+                        '<div class="dc-group">' +
+                            '<label class="dc-label">02. Lazy Reply / 偷懒代发 (Optional)</label>' +
+                            '<input type="text" class="dc-input" id="cdDcLazy" placeholder="Type a direct message to send along...">' +
+                        '</div>' +
+                        '<button class="dc-submit" id="cdDcSubmit">Execute</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
         '</div>' +
     '</div>' +
     '<style>' +
@@ -821,6 +851,58 @@
         '#caChatDetail .ms-delete:active { transform: scale(0.9); }' +
         '#caChatDetail .ms-cancel:active { opacity: 0.5; }' +
         '#caChatDetail .msg-checkbox { display: none !important; }' +
+
+        '/* Director Card */' +
+        '.director-card-wrap { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 180; width: 92%; max-width: 340px; pointer-events: none; opacity: 0; transition: opacity 0.3s, transform 0.4s cubic-bezier(0.16,1,0.3,1); transform: translateX(-50%) translateY(20px) scale(0.95); }' +
+        '.director-card-wrap.active { pointer-events: auto; opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }' +
+        '.director-card { background: #FFFFFF; border: 1px solid #151515; border-left: 6px solid #151515; border-radius: 0 16px 16px 0; box-shadow: 12px 12px 0 rgba(21,21,21,0.04); overflow: hidden; position: relative; }' +
+        '.dc-stripe { height: 12px; background: repeating-linear-gradient(-45deg, #151515, #151515 10px, #fff 10px, #fff 20px); border-bottom: 1px solid #151515; }' +
+        '.dc-close { position: absolute; top: 20px; right: 14px; width: 28px; height: 28px; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 10; border-radius: 50%; background: rgba(21,21,21,0.05); }' +
+        '.dc-close svg { width: 14px; height: 14px; stroke: #151515; fill: none; stroke-width: 2; stroke-linecap: round; }' +
+        '.dc-body { padding: 20px 18px 18px; position: relative; }' +
+        '.dc-wm { position: absolute; top: 20px; left: -10px; font-family: "Great Vibes", cursive; font-size: 60px; color: rgba(21,21,21,0.03); transform: rotate(-10deg); pointer-events: none; }' +
+        '.dc-title { position: relative; z-index: 1; font-family: "Playfair Display", serif; font-style: italic; font-size: 18px; font-weight: 900; color: #151515; margin-bottom: 16px; text-align: right; }' +
+
+        /* Type Selector (弹簧滑块) */
+        '.dc-type-selector { display: flex; position: relative; z-index: 1; background: rgba(21,21,21,0.04); border-radius: 50px; padding: 3px; margin-bottom: 18px; }' +
+        '.dc-ts-highlight { position: absolute; top: 3px; bottom: 3px; width: calc(33.333% - 2px); background: #151515; border-radius: 50px; transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1), background 0.3s; transform: translateX(calc(var(--idx,0) * 100%)); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }' +
+        '.dc-type-selector.is-error .dc-ts-highlight { background: #A63426; }' +
+        '.dc-type-label { flex: 1; text-align: center; position: relative; z-index: 2; cursor: pointer; padding: 7px 0; }' +
+        '.dc-type-label input { display: none; }' +
+        '.dc-type-label span { font-size: 10px; font-weight: 700; color: rgba(21,21,21,0.35); text-transform: uppercase; letter-spacing: 1px; transition: color 0.3s; display: block; }' +
+        '.dc-type-label input:checked + span { color: #fff; }' +
+
+        /* Inputs */
+        '.dc-group { margin-bottom: 14px; position: relative; z-index: 1; }' +
+        '.dc-label { display: block; font-family: "Share Tech Mono", monospace; font-size: 8px; color: #A63426; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px; }' +
+        '.dc-textarea { width: 100%; background: transparent; border: none; border-bottom: 1px dashed rgba(21,21,21,0.25); outline: none; font-family: "Playfair Display", serif; font-size: 14px; color: #151515; resize: none; min-height: 32px; line-height: 1.4; padding-bottom: 4px; }' +
+        '.dc-textarea::placeholder { font-style: italic; color: rgba(21,21,21,0.2); }' +
+        '.dc-input { width: 100%; background: rgba(21,21,21,0.03); border: 1px solid rgba(21,21,21,0.08); border-radius: 8px; outline: none; font-family: "Space Grotesk", sans-serif; font-size: 12px; color: #151515; padding: 9px 12px; transition: border 0.2s; }' +
+        '.dc-input:focus { border-color: #151515; background: #fff; }' +
+        '.dc-submit { position: relative; z-index: 1; width: 100%; background: transparent; border: 1px solid #151515; color: #151515; padding: 11px; font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; border-radius: 50px; cursor: pointer; transition: all 0.2s; margin-top: 6px; font-family: "Space Grotesk", sans-serif; }' +
+        '.dc-submit:active { background: #151515; color: #fff; transform: scale(0.97); }' +
+
+        '/* Director Notification */' +
+        '.dc-notif-row { width: 100%; display: flex; justify-content: center; margin: 8px 0; animation: dcSlideUp 0.4s cubic-bezier(0.16,1,0.3,1); }' +
+        '@keyframes dcSlideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }' +
+        '.dc-notif-glass { background: rgba(255,255,255,0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 0.5px solid rgba(0,0,0,0.08); border-radius: 24px; padding: 8px 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 88%; display: flex; gap: 10px; align-items: flex-start; }' +
+        '.dc-notif-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 50px; letter-spacing: 1px; flex-shrink: 0; font-family: "Share Tech Mono", monospace; margin-top: 1.5px; }' +
+        '.dc-notif-body { flex: 1; min-width: 0; }' +
+        '.dc-notif-directive { font-size: 12px; font-weight: 600; color: #151515; line-height: 1.3; word-wrap: break-word; }' +
+        '.dc-notif-lazy { margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(0,0,0,0.1); font-size: 10px; color: rgba(21,21,21,0.35); display: flex; gap: 6px; line-height: 1.2; }' +
+        '.dc-notif-lazy::before { content: "↳"; color: #A63426; font-weight: 700; }' +
+
+        /* 旁白变体 */
+        '.dc-notif-glass[data-type="旁白"] .dc-notif-badge { background: #151515; color: #fff; }' +
+        '.dc-notif-glass[data-type="旁白"] .dc-notif-directive { font-family: "Playfair Display", serif; font-style: italic; font-size: 13px; }' +
+        /* 动作变体 */
+        '.dc-notif-glass[data-type="动作"] .dc-notif-badge { background: transparent; color: #151515; border: 1px solid #151515; }' +
+        '.dc-notif-glass[data-type="动作"] .dc-notif-directive { font-family: "Space Grotesk", sans-serif; color: #444; }' +
+        /* 纠错变体 */
+        '.dc-notif-glass[data-type="纠错"] { border-color: rgba(166,52,38,0.2); background: rgba(255,255,255,0.85); }' +
+        '.dc-notif-glass[data-type="纠错"] .dc-notif-badge { background: #A63426; color: #fff; }' +
+        '.dc-notif-glass[data-type="纠错"] .dc-notif-directive { color: #A63426; text-decoration: line-through; text-decoration-color: rgba(166,52,38,0.4); }' +
+
     '</style>';
 }
 

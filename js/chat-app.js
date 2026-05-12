@@ -1224,7 +1224,12 @@
     function updateMsgGrouping() {
         var area = document.getElementById('cdChatArea');
         if (!area) return;
-        var rows = Array.from(area.querySelectorAll('.msg-row:not(.sys-msg)'));
+        var allRows = Array.from(area.querySelectorAll('.msg-row:not(.sys-msg)'));
+        var rows = allRows.length > 6 ? allRows.slice(-6) : allRows;
+        if (allRows.length > 6) {
+            var prev = allRows[allRows.length - 7];
+            if (prev) prev.classList.remove('grouped');
+        }
         var lastType = null;
         var lastRow = null;
         rows.forEach(function(row) {
@@ -1335,8 +1340,7 @@
             if (sentinel) bindSentinel(sentinel);
 
         } else {
-            area.style.visibility = 'hidden';
-            area.style.pointerEvents = 'none';
+            area.style.display = 'none';
             area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
             cdLastMsgType = null;
             cdLastMsgRow = null;
@@ -1396,8 +1400,7 @@
 
             updateMsgGrouping();
 
-            area.style.visibility = '';
-            area.style.pointerEvents = '';
+            area.style.display = '';
             area.style.scrollBehavior = 'auto';
             area.scrollTop = area.scrollHeight;
 
@@ -2269,7 +2272,7 @@
         history.forEach(function (m) {
             if (m.role === 'info') {
                 if (m.ai_visible) {
-                    apiMessages.push({ role: 'user', content: '[SYSTEM NOTIFICATION] ' + m.text });
+                    apiMessages.push({ role: 'system', content: '[INJECTED_DIRECTIVE — NOT user speech. Do NOT reply to this as if the user said it. Do NOT quote or reference this text in your response. Silently absorb and comply.]\n' + m.text });
                 }
                 return;
             }
@@ -2329,7 +2332,8 @@
         history.forEach(function (m) {
             if (m.role === 'info') {
                 if (m.ai_visible) {
-                    msgList.push({ role: 'user', content: '[SYSTEM NOTIFICATION] ' + m.text });
+                    msgList.push({ role: 'user', content: '[INJECTED_DIRECTIVE — NOT user speech. This is a system-level stage direction. Do NOT treat as dialogue. Do NOT reply to this. Silently absorb and comply.]\n' + m.text });
+                    msgList.push({ role: 'assistant', content: '[Understood. Directive absorbed silently.]' });
                 }
                 return;
             }
@@ -2395,7 +2399,11 @@
                 if (m.ai_visible) {
                     contents.push({
                         role: 'user',
-                        parts: [{ text: '[SYSTEM NOTIFICATION] ' + m.text }]
+                        parts: [{ text: '[INJECTED_DIRECTIVE — NOT user speech. System-level stage direction. Do NOT treat as dialogue. Silently absorb and comply.]\n' + m.text }]
+                    });
+                    contents.push({
+                        role: 'model',
+                        parts: [{ text: '[Directive absorbed.]' }]
                     });
                 }
                 return;
@@ -2649,6 +2657,99 @@
             headerTitleEl.addEventListener('click', function(ev) {
                 ev.stopPropagation();
                 if (currentChatId) window.showNicknameModal(currentChatId);
+            });
+        }
+
+        /* ── 导演卡片 (Director Card) ── */
+        var cdNarrationBtn = document.getElementById('cdMenuNarration');
+        if (cdNarrationBtn) {
+            cdNarrationBtn.addEventListener('click', function() {
+                var detail = document.getElementById('caChatDetail');
+                if (detail) detail.classList.remove('show-drawer');
+                var wrap = document.getElementById('cdDirectorWrap');
+                if (wrap) wrap.classList.add('active');
+            });
+        }
+        var cdDirectorClose = document.getElementById('cdDirectorClose');
+        if (cdDirectorClose) {
+            cdDirectorClose.addEventListener('click', function() {
+                var wrap = document.getElementById('cdDirectorWrap');
+                if (wrap) wrap.classList.remove('active');
+            });
+        }
+        /* 导演卡片：弹簧滑块交互 */
+        var dcRadios = document.querySelectorAll('input[name="dcType"]');
+        var dcSelector = document.getElementById('cdDcTypeSelector');
+        if (dcRadios.length && dcSelector) {
+            dcRadios.forEach(function(radio, index) {
+                radio.addEventListener('change', function() {
+                    dcSelector.style.setProperty('--idx', index);
+                    if (radio.value === '纠错') {
+                        dcSelector.classList.add('is-error');
+                    } else {
+                        dcSelector.classList.remove('is-error');
+                    }
+                });
+            });
+        }
+        /* 导演卡片：提交 */
+        var cdDcSubmit = document.getElementById('cdDcSubmit');
+        if (cdDcSubmit) {
+            cdDcSubmit.addEventListener('click', function() {
+                if (!currentChatId) return;
+                var selectedType = document.querySelector('input[name="dcType"]:checked');
+                var typeVal = selectedType ? selectedType.value : '旁白';
+                var directiveEl = document.getElementById('cdDcDirective');
+                var lazyEl = document.getElementById('cdDcLazy');
+                var directiveText = directiveEl ? directiveEl.value.trim() : '';
+                var lazyText = lazyEl ? lazyEl.value.trim() : '';
+
+                if (!directiveText && !lazyText) {
+                    if (directiveEl) { directiveEl.style.borderBottomColor = '#A63426'; setTimeout(function(){ directiveEl.style.borderBottomColor = ''; }, 1000); }
+                    return;
+                }
+
+                /* 构建通知 DOM 并插入聊天区 */
+                var area = document.getElementById('cdChatArea');
+                if (!area) return;
+
+                var lazyHTML = lazyText ? '<div class="dc-notif-lazy">"' + escapeHtml(lazyText) + '"</div>' : '';
+                var notifEl = document.createElement('div');
+                notifEl.className = 'dc-notif-row';
+                notifEl.innerHTML =
+                    '<div class="dc-notif-glass" data-type="' + typeVal + '">' +
+                        '<div class="dc-notif-badge">' + typeVal + '</div>' +
+                        '<div class="dc-notif-body">' +
+                            (directiveText ? '<div class="dc-notif-directive">' + escapeHtml(directiveText) + '</div>' : '') +
+                            lazyHTML +
+                        '</div>' +
+                    '</div>';
+                area.appendChild(notifEl);
+                setTimeout(function() { area.scrollTop = area.scrollHeight; }, 10);
+
+                /* 存入对话记录：指令部分为 info（系统提示，AI可见但不认为是user发的）；偷懒代发部分为 user 消息 */
+                if (!conversations[currentChatId]) conversations[currentChatId] = [];
+
+                if (directiveText) {
+                    var dirPrefix = '';
+                    if (typeVal === '旁白') dirPrefix = '::NARRATOR_INJECT::{type:environment_description,speaker:NONE,is_user_speech:FALSE}:: ';
+                    else if (typeVal === '动作') dirPrefix = '::ACTION_INJECT::{type:physical_action,performer:user_character,is_user_speech:FALSE,note:THIS_IS_NOT_DIALOGUE}:: ';
+                    else if (typeVal === '纠错') dirPrefix = '::CORRECTION_OVERRIDE::{type:behavior_correction,target:your_last_response,is_user_speech:FALSE,priority:ABSOLUTE,instruction:SILENTLY_COMPLY}:: ';
+                    var infoText = dirPrefix + directiveText;
+                    conversations[currentChatId].push({ role: 'info', text: infoText, ai_visible: true, time: dateNow() + ' ' + timeNow() });
+                }
+
+                if (lazyText) {
+                    conversations[currentChatId].push({ role: 'user', text: lazyText, time: dateNow() + ' ' + timeNow() });
+                }
+
+                saveOneConversation(currentChatId);
+
+                /* 清空并关闭 */
+                if (directiveEl) directiveEl.value = '';
+                if (lazyEl) lazyEl.value = '';
+                var wrap = document.getElementById('cdDirectorWrap');
+                if (wrap) wrap.classList.remove('active');
             });
         }
 
