@@ -1001,11 +1001,22 @@
                         var nType = nm.role === 'user' ? 'sent' : 'received';
                         var nTime = formatStoredTime((nm.time || '').split(' ')[1] || nm.time);
                         var nText = nm.role === 'user' ? stripSysTime(nm.text) : nm.text;
-                        var nRow = cdBuildRow(nText, nType, nTime, nm.role === 'user' ? 'READ' : '', false);
-                        nRow.dataset.msgIndex = String(ni);
-                        nRow.dataset.segIndex = '0';
-                        nRow.dataset.segTotal = '1';
-                        area.appendChild(nRow);
+                        if (nm.role !== 'user' && nText.indexOf('\n') !== -1) {
+                            var segs = nText.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+                            segs.forEach(function(seg, segIdx) {
+                                var nRow = cdBuildRow(seg, nType, nTime, '', false);
+                                nRow.dataset.msgIndex = String(ni);
+                                nRow.dataset.segIndex = String(segIdx);
+                                nRow.dataset.segTotal = String(segs.length);
+                                area.appendChild(nRow);
+                            });
+                        } else {
+                            var nRow = cdBuildRow(nText, nType, nTime, nm.role === 'user' ? 'READ' : '', false);
+                            nRow.dataset.msgIndex = String(ni);
+                            nRow.dataset.segIndex = '0';
+                            nRow.dataset.segTotal = '1';
+                            area.appendChild(nRow);
+                        }
                     }
                 }
                 updateMsgGrouping();
