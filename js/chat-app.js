@@ -28,8 +28,23 @@
         });
     }
 
+    var _saveEntTimer = null;
+    var _saveEntQueue = new Set();
     function saveOneEntity(ent, cb) {
-        ChatDB.saveEntity(ent, cb);
+        _saveEntQueue.add(ent);
+        if (_saveEntTimer) clearTimeout(_saveEntTimer);
+        _saveEntTimer = setTimeout(function() {
+            _saveEntTimer = null;
+            var batch = Array.from(_saveEntQueue);
+            _saveEntQueue.clear();
+            var remaining = batch.length;
+            batch.forEach(function(e) {
+                ChatDB.saveEntity(e, function() {
+                    remaining--;
+                    if (remaining === 0 && cb) cb();
+                });
+            });
+        }, 200);
     }
 
     function saveConversations(cb) {
@@ -44,8 +59,13 @@
         });
     }
 
+    var _saveConvTimers = {};
     function saveOneConversation(id, cb) {
-        ChatDB.saveConversation(id, conversations[id] || [], cb);
+        if (_saveConvTimers[id]) clearTimeout(_saveConvTimers[id]);
+        _saveConvTimers[id] = setTimeout(function() {
+            delete _saveConvTimers[id];
+            ChatDB.saveConversation(id, conversations[id] || [], cb);
+        }, 300);
     }
 
     var avatarColors = ['#1C1C1E','#2C2C2E','#3A3A3C','#48484A','#636366','#8E8E93'];
@@ -1224,12 +1244,7 @@
     function updateMsgGrouping() {
         var area = document.getElementById('cdChatArea');
         if (!area) return;
-        var allRows = Array.from(area.querySelectorAll('.msg-row:not(.sys-msg)'));
-        var rows = allRows.length > 6 ? allRows.slice(-6) : allRows;
-        if (allRows.length > 6) {
-            var prev = allRows[allRows.length - 7];
-            if (prev) prev.classList.remove('grouped');
-        }
+        var rows = Array.from(area.querySelectorAll('.msg-row:not(.sys-msg)'));
         var lastType = null;
         var lastRow = null;
         rows.forEach(function(row) {
@@ -1340,7 +1355,8 @@
             if (sentinel) bindSentinel(sentinel);
 
         } else {
-            area.style.display = 'none';
+            area.style.visibility = 'hidden';
+            area.style.pointerEvents = 'none';
             area.innerHTML = '<div class="chat-mask" id="cdChatMask"></div><div class="lp-overlay" id="cdLpOverlay"></div>';
             cdLastMsgType = null;
             cdLastMsgRow = null;
@@ -1400,7 +1416,8 @@
 
             updateMsgGrouping();
 
-            area.style.display = '';
+            area.style.visibility = '';
+            area.style.pointerEvents = '';
             area.style.scrollBehavior = 'auto';
             area.scrollTop = area.scrollHeight;
 
