@@ -1102,6 +1102,9 @@
         var rows = Array.from(area.querySelectorAll('.msg-row:not(#cdTypingRow)'));
         if (rows.length <= 20) return;
 
+        var oldScrollHeight = area.scrollHeight;
+        var oldScrollTop = area.scrollTop;
+
         /* 把最早的那一行移除，保持DOM行数不超过20 */
         var excess = rows.length - 20;
         for (var i = 0; i < excess; i++) {
@@ -1109,6 +1112,12 @@
                 rows[i].parentNode.removeChild(rows[i]);
             }
         }
+
+        /* 立即矫正滚动位置，防止跳动 */
+        requestAnimationFrame(function() {
+            var diff = oldScrollHeight - area.scrollHeight;
+            area.scrollTop = Math.max(0, oldScrollTop - diff);
+        });
 
         /* 确保顶部有 sentinel 提示可以加载更多 */
         if (!document.getElementById('cdLoadSentinel')) {
@@ -1426,15 +1435,16 @@
 
             updateMsgGrouping();
 
-            area.style.scrollBehavior = 'auto';
-            area.scrollTop = area.scrollHeight - oldScrollHeight + oldScrollTop;
-            setTimeout(function() {
-                area.style.scrollBehavior = '';
-                isMessagesLoading = false;
-            }, 50);
+            requestAnimationFrame(function() {
+                area.scrollTop = area.scrollHeight - oldScrollHeight + oldScrollTop;
 
-            var sentinel = document.getElementById('cdLoadSentinel');
-            if (sentinel) bindSentinel(sentinel);
+                var sentinel = document.getElementById('cdLoadSentinel');
+                if (sentinel) bindSentinel(sentinel);
+
+                setTimeout(function() {
+                    isMessagesLoading = false;
+                }, 300);
+            });
 
         } else {
             cdLastMsgType = null;
@@ -1513,7 +1523,12 @@
             if (!window._cdScrollBound) {
             var scrollArea = document.getElementById('cdChatArea');
             if (scrollArea) {
+                var _scrollDebounceTimer = null;
                 scrollArea.addEventListener('scroll', function() {
+                    if (_scrollDebounceTimer) return;
+                    _scrollDebounceTimer = setTimeout(function() {
+                        _scrollDebounceTimer = null;
+                    }, 200);
                     var a = document.getElementById('cdChatArea');
                     if (!a) return;
                     if (a.scrollTop < 80 && !isMessagesLoading && currentChatId) {
@@ -1553,18 +1568,18 @@
                                 a.appendChild(fragment);
                             }
 
-                            a.style.scrollBehavior = 'auto';
-                            a.scrollTop = oldScrollTop + (a.scrollHeight - oldScrollHeight);
+                            requestAnimationFrame(function() {
+                                a.scrollTop = oldScrollTop + (a.scrollHeight - oldScrollHeight);
 
-                            updateMsgGrouping();
+                                updateMsgGrouping();
 
-                            var newSentinel = document.getElementById('cdLoadSentinel');
-                            if (newSentinel) bindSentinel(newSentinel);
+                                var newSentinel = document.getElementById('cdLoadSentinel');
+                                if (newSentinel) bindSentinel(newSentinel);
 
-                            setTimeout(function() {
-                                a.style.scrollBehavior = '';
-                                isMessagesLoading = false;
-                            }, 50);
+                                setTimeout(function() {
+                                    isMessagesLoading = false;
+                                }, 300);
+                            });
                         }
                     }
                 }, { passive: true });
@@ -4864,11 +4879,11 @@
                     var dx = e.touches[0].clientX - saStartX;
                     var dy = e.touches[0].clientY - saStartY;
 
-                    /* 灵敏触发：向左滑，dx < 0 且水平偏移大于垂直偏移 */
-                    if (dx < -5 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+                    /* 严格判定：向左滑超过 30px，且水平偏移大于垂直偏移 2 倍以上才触发 */
+                    if (dx < -30 && Math.abs(dx) > Math.abs(dy) * 2) {
                         saIsSwiping = true;
                         
-                        var maxDx = -70; /* 整个聊天室气泡区域向左滑动，留出右边空间 */
+                        var maxDx = -70;
                         var currentDx = Math.max(dx, maxDx);
                         var progress = Math.min(Math.abs(currentDx) / 60, 1);
                         
