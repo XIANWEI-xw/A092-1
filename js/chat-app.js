@@ -89,8 +89,7 @@
             '@keyframes ca-plaque-swing { 0% { transform: translateY(-8px) rotate(-3deg); opacity: 0; } 45% { transform: translateY(1.5px) rotate(1.5deg); opacity: 1; } 65% { transform: translateY(-0.5px) rotate(-0.5deg); } 85% { transform: translateY(0) rotate(0.2deg); } 100% { transform: translateY(0) rotate(0deg); opacity: 1; } }' +
             '.ca-header-hanging { transform-origin: top center; }' +
             '.ca-header-hanging.anim-swing { animation: ca-plaque-swing 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }' +
-            '.chat-area { -webkit-overflow-scrolling: touch; transform: translateZ(0); }' +
-            '.msg-row { -webkit-transform: translateZ(0); transform: translateZ(0); }' +
+            '.chat-area { -webkit-overflow-scrolling: touch; }' +
             '.bubble { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }' +
             '@media (min-width: 431px) {' +
                 '.chat-app-window { top: 50% !important; left: 50% !important; bottom: auto !important; right: auto !important; transform: translate(-50%, -50%) translateZ(0) !important; }' +
@@ -1095,59 +1094,7 @@
     var cdDisplayLimit = 18;
 
     function checkAndPaginateLive() {
-        if (!currentChatId) return;
-        var area = document.getElementById('cdChatArea');
-        if (!area) return;
-        var msgs = conversations[currentChatId] || [];
-        var rows = Array.from(area.querySelectorAll('.msg-row:not(#cdTypingRow)'));
-        if (rows.length <= 20) return;
-
-        var oldScrollHeight = area.scrollHeight;
-        var oldScrollTop = area.scrollTop;
-
-        /* 把最早的那一行移除，保持DOM行数不超过20 */
-        var excess = rows.length - 20;
-        for (var i = 0; i < excess; i++) {
-            if (rows[i] && rows[i].parentNode) {
-                rows[i].parentNode.removeChild(rows[i]);
-            }
-        }
-
-        /* 立即矫正滚动位置，防止跳动 */
-        requestAnimationFrame(function() {
-            var diff = oldScrollHeight - area.scrollHeight;
-            area.scrollTop = Math.max(0, oldScrollTop - diff);
-        });
-
-        /* 确保顶部有 sentinel 提示可以加载更多 */
-        if (!document.getElementById('cdLoadSentinel')) {
-            var sentinel = document.createElement('div');
-            sentinel.className = 'cd-load-hint';
-            sentinel.id = 'cdLoadSentinel';
-            sentinel.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
-            var remaining = msgs.length - 20;
-            sentinel.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">↑ LOAD MORE · ' + remaining + ' REMAINING</div><div class="lh-line"></div>';
-
-            sentinel.onclick = function(e) {
-                e.stopPropagation();
-                cdDisplayLimit += 18;
-                renderMessages(currentChatId, true);
-            };
-            sentinel.ontouchend = function(e) {
-                e.stopPropagation();
-                cdDisplayLimit += 18;
-                renderMessages(currentChatId, true);
-            };
-
-            var sysMsg = area.querySelector('.sys-msg');
-            if (sysMsg && sysMsg.nextSibling) {
-                area.insertBefore(sentinel, sysMsg.nextSibling);
-            } else if (sysMsg) {
-                area.insertBefore(sentinel, sysMsg.nextSibling || area.firstChild);
-            } else {
-                area.insertBefore(sentinel, area.firstChild);
-            }
-        }
+        return;
     }
 
     var isMessagesLoading = false;
@@ -1523,64 +1470,59 @@
             if (!window._cdScrollBound) {
             var scrollArea = document.getElementById('cdChatArea');
             if (scrollArea) {
-                var _scrollDebounceTimer = null;
+                var _scrollLoadCooldown = false;
                 scrollArea.addEventListener('scroll', function() {
-                    if (_scrollDebounceTimer) return;
-                    _scrollDebounceTimer = setTimeout(function() {
-                        _scrollDebounceTimer = null;
-                    }, 200);
+                    if (_scrollLoadCooldown || isMessagesLoading) return;
                     var a = document.getElementById('cdChatArea');
                     if (!a) return;
-                    if (a.scrollTop < 80 && !isMessagesLoading && currentChatId) {
+                    if (a.scrollTop < 60 && currentChatId) {
                         var msgs2 = conversations[currentChatId] || [];
-                        if (cdDisplayLimit < msgs2.length) {
-                            isMessagesLoading = true;
-                            var loadChatId = currentChatId;
+                        if (cdDisplayLimit >= msgs2.length) return;
+                        isMessagesLoading = true;
+                        _scrollLoadCooldown = true;
 
-                            var oldScrollHeight = a.scrollHeight;
-                            var oldScrollTop = a.scrollTop;
+                        var oldScrollHeight = a.scrollHeight;
+                        var oldScrollTop = a.scrollTop;
 
-                            cdDisplayLimit += 18;
-                            var allMsgs = msgs2;
-                            var newStartIdx = Math.max(0, allMsgs.length - cdDisplayLimit);
-                            var oldStartIdx = newStartIdx + 18;
+                        cdDisplayLimit += 18;
+                        var allMsgs = msgs2;
+                        var newStartIdx = Math.max(0, allMsgs.length - cdDisplayLimit);
+                        var oldStartIdx = newStartIdx + 18;
 
-                            var newBatchMsgs = allMsgs.slice(newStartIdx, oldStartIdx);
-                            var fragment = buildMsgFragment(newBatchMsgs, newStartIdx);
+                        var newBatchMsgs = allMsgs.slice(newStartIdx, oldStartIdx);
+                        var fragment = buildMsgFragment(newBatchMsgs, newStartIdx);
 
-                            var oldSentinel = document.getElementById('cdLoadSentinel');
-                            if (oldSentinel) oldSentinel.remove();
+                        var oldSentinel = document.getElementById('cdLoadSentinel');
+                        if (oldSentinel) oldSentinel.remove();
 
-                            if (newStartIdx > 0) {
-                                var loadHint = document.createElement('div');
-                                loadHint.className = 'cd-load-hint';
-                                loadHint.id = 'cdLoadSentinel';
-                                loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
-                                loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(newStartIdx / 18) + '</div><div class="lh-line"></div>';
-                                fragment.insertBefore(loadHint, fragment.firstChild);
-                            }
-
-                            var sysMsg = a.querySelector('.sys-msg');
-                            var insertRef = sysMsg ? sysMsg.nextSibling : a.querySelector('.msg-row');
-                            if (insertRef) {
-                                a.insertBefore(fragment, insertRef);
-                            } else {
-                                a.appendChild(fragment);
-                            }
-
-                            requestAnimationFrame(function() {
-                                a.scrollTop = oldScrollTop + (a.scrollHeight - oldScrollHeight);
-
-                                updateMsgGrouping();
-
-                                var newSentinel = document.getElementById('cdLoadSentinel');
-                                if (newSentinel) bindSentinel(newSentinel);
-
-                                setTimeout(function() {
-                                    isMessagesLoading = false;
-                                }, 300);
-                            });
+                        if (newStartIdx > 0) {
+                            var loadHint = document.createElement('div');
+                            loadHint.className = 'cd-load-hint';
+                            loadHint.id = 'cdLoadSentinel';
+                            loadHint.style.cssText = 'cursor:pointer;opacity:1;user-select:none;-webkit-user-select:none;position:relative;z-index:9999;pointer-events:auto;padding:20px 0;';
+                            loadHint.innerHTML = '<div class="lh-line"></div><div class="lh-text" style="pointer-events:none;">\u2191 LOAD MORE \u00b7 SEC_' + Math.ceil(newStartIdx / 18) + '</div><div class="lh-line"></div>';
+                            fragment.insertBefore(loadHint, fragment.firstChild);
                         }
+
+                        var sysMsg = a.querySelector('.sys-msg');
+                        var insertRef = sysMsg ? sysMsg.nextSibling : a.querySelector('.msg-row');
+                        if (insertRef) {
+                            a.insertBefore(fragment, insertRef);
+                        } else {
+                            a.appendChild(fragment);
+                        }
+
+                        a.scrollTop = oldScrollTop + (a.scrollHeight - oldScrollHeight);
+
+                        updateMsgGrouping();
+
+                        var newSentinel = document.getElementById('cdLoadSentinel');
+                        if (newSentinel) bindSentinel(newSentinel);
+
+                        isMessagesLoading = false;
+                        setTimeout(function() {
+                            _scrollLoadCooldown = false;
+                        }, 500);
                     }
                 }, { passive: true });
                 window._cdScrollBound = true;
