@@ -582,11 +582,11 @@
         '.msg-row.no-anim{animation:none!important;transition:none!important;opacity:1!important;}' +
         '.msg-row.no-anim .bubble{animation:none!important;transition:none!important;}' +
         
-        '#caChatDetail #cdChatArea > *:not(#cdChatMask) {' +
+        '#caChatDetail #cdChatArea {' +
             'transform: translate3d(var(--swipe-x, 0px), 0, 0);' +
             'transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);' +
         '}' +
-        '#caChatDetail #cdChatArea.is-swiping > *:not(#cdChatMask) {' +
+        '#caChatDetail #cdChatArea.is-swiping {' +
             'transition: none !important;' +
         '}' +
         

@@ -4869,8 +4869,6 @@
                     saStartX = e.touches[0].clientX;
                     saStartY = e.touches[0].clientY;
                     saIsSwiping = false;
-                    var ca = document.getElementById('cdChatArea');
-                    if (ca) ca.classList.add('is-swiping');
                 }
             }, {passive: true});
 
@@ -4879,15 +4877,18 @@
                     var dx = e.touches[0].clientX - saStartX;
                     var dy = e.touches[0].clientY - saStartY;
 
-                    /* 严格判定：向左滑超过 30px，且水平偏移大于垂直偏移 2 倍以上才触发 */
-                    if (dx < -30 && Math.abs(dx) > Math.abs(dy) * 2) {
+                    /* 严格判定：向左滑超过 25px，且水平偏移大于垂直偏移 2 倍 */
+                    if (dx < -25 && Math.abs(dx) > Math.abs(dy) * 2) {
+                        var ca = document.getElementById('cdChatArea');
+                        if (!saIsSwiping && ca) {
+                            ca.classList.add('is-swiping');
+                        }
                         saIsSwiping = true;
                         
                         var maxDx = -70;
                         var currentDx = Math.max(dx, maxDx);
                         var progress = Math.min(Math.abs(currentDx) / 60, 1);
                         
-                        var ca = document.getElementById('cdChatArea');
                         if (ca) ca.style.setProperty('--swipe-x', currentDx + 'px');
 
                         swipeArrow.style.transition = 'none';
